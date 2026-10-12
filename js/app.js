@@ -8,6 +8,7 @@ import { ImageProcessor, parseColor } from './core/image-processor.js';
 import { CanvasWorkspace } from './core/canvas-workspace.js';
 import { overlapIsolator } from './core/overlap-isolator.js';
 import { FrameAlignment, frameAlignment } from './core/frame-alignment.js';
+import { AnimationPlayer } from './core/animation-player.js';
 
 class SpriteAnimatorApp {
   constructor() {
@@ -17,6 +18,7 @@ class SpriteAnimatorApp {
     this.draggedFrame = null;
 
     this.initElements();
+    this.initAnimationPlayer();
     this.initCanvasWorkspace();
     this.bindEvents();
     this.bindStateSubscriptions();
@@ -79,6 +81,8 @@ class SpriteAnimatorApp {
     // 播放器与视口控件
     this.btnPlayPause = document.getElementById('btn-play-pause');
     this.playIcon = document.getElementById('play-icon');
+    this.btnTopPlayPause = document.getElementById('btn-top-play-pause');
+    this.topPlayIcon = document.getElementById('top-play-icon');
     this.fpsSlider = document.getElementById('fps-slider');
     this.fpsDisplay = document.getElementById('fps-display');
     this.loopModeSelect = document.getElementById('loop-mode-select');
@@ -100,6 +104,92 @@ class SpriteAnimatorApp {
     this.presetColorBtns = document.querySelectorAll('.preset-color-btn');
     this.modalToleranceSlider = document.getElementById('modal-tolerance-slider');
     this.modalToleranceVal = document.getElementById('modal-tolerance-val');
+  }
+
+  /**
+   * 初始化实时动画播放器引擎
+   */
+  initAnimationPlayer() {
+    const playerState = state.get('playerState') || {};
+    this.player = new AnimationPlayer({
+      fps: playerState.fps || 12,
+      loopMode: playerState.loopMode || 'loop',
+      frames: state.get('frames') || [],
+      canvas: this.playerCanvas,
+      sourceImage: state.get('sourceImage'),
+      onFrameChange: (index, frame) => {
+        state.setPlayerState({ currentFrameIndex: index });
+        if (this.playerFrameIndicator) {
+          const total = this.player.frames.length;
+          this.playerFrameIndicator.textContent = total > 0 ? `${index + 1} / ${total}` : '0 / 0';
+        }
+        // 高亮当前播放帧缩略图
+        this.highlightPlayingFrame(index);
+
+        // 如果在暂停状态下单步切换，联动全局选中帧
+        if (!this.player.isPlaying && frame) {
+          state.selectFrame(frame.id);
+        }
+      },
+      onPlayStateChange: (isPlaying) => {
+        state.setPlayerState({ isPlaying });
+        this.updatePlayPauseUI(isPlaying);
+        this.setStatus(isPlaying ? `动画正在以 ${this.player.fps} FPS 播放中...` : '动画播放已暂停');
+      },
+      renderCustom: (canvas, frame, allFrames, currentIndex, sourceImage, opts) => {
+        if (!canvas) return;
+        const ps = state.get('playerState') || {};
+        frameAlignment.renderAlignmentStage(
+          canvas,
+          frame,
+          allFrames,
+          currentIndex,
+          sourceImage,
+          {
+            ...ps,
+            ...opts
+          }
+        );
+      }
+    });
+  }
+
+  /**
+   * 高亮播放中的当前帧项，并滚动到视口中
+   * @param {number} index 
+   */
+  highlightPlayingFrame(index) {
+    if (!this.frameList) return;
+    const items = this.frameList.querySelectorAll('.frame-item');
+    items.forEach((item, idx) => {
+      const isCurrent = idx === index;
+      item.classList.toggle('playing', isCurrent);
+      if (isCurrent && this.player && this.player.isPlaying) {
+        item.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+      }
+    });
+  }
+
+  /**
+   * 更新顶栏与播放器底部的播放/暂停按钮视觉状态
+   * @param {boolean} isPlaying 
+   */
+  updatePlayPauseUI(isPlaying) {
+    if (this.playIcon) {
+      this.playIcon.textContent = isPlaying ? '⏸' : '▶';
+    }
+    if (this.topPlayIcon) {
+      this.topPlayIcon.textContent = isPlaying ? '⏸' : '▶';
+    }
+    if (this.btnTopPlayPause) {
+      const label = this.btnTopPlayPause.querySelector('span:not(#top-play-icon)');
+      if (label) label.textContent = isPlaying ? '暂停' : '播放';
+      this.btnTopPlayPause.classList.toggle('btn-primary', isPlaying);
+      this.btnTopPlayPause.classList.toggle('btn-secondary', !isPlaying);
+    }
+    if (this.btnPlayPause) {
+      this.btnPlayPause.classList.toggle('playing', isPlaying);
+    }
   }
 
   initCanvasWorkspace() {
@@ -294,36 +384,187 @@ class SpriteAnimatorApp {
       });
     }
 
-    // 播放器 FPS 滑块
-    if (this.fpsSlider && this.fpsDisplay) {
-      this.fpsSlider.addEventListener('input', (e) => {
-        const fps = parseInt(e.target.value, 10);
-        this.fpsDisplay.textContent = `${fps} FPS`;
-        state.setPlayerState({ fps });
-      });
-    }
+    // 绑定实时动画播放器控件与键盘全局快捷键
+    this.bindPlayerControls();
 
-    // 循环模式
-    if (this.loopModeSelect) {
-      this.loopModeSelect.addEventListener('change', (e) => {
-        state.setPlayerState({ loopMode: e.target.value });
-      });
-    }
-
-    // 播放/暂停
-    if (this.btnPlayPause) {
-      this.btnPlayPause.addEventListener('click', () => {
-        const isPlaying = !state.get('playerState').isPlaying;
-        state.setPlayerState({ isPlaying });
-      });
-    }
-
-    // 绑定九宫格锚点、偏移量输入、洋葱皮与键盘微调事件
+    // 绑定九宫格锚点、偏移量输入、洋葱皮与准星拖拽事件
     this.bindAlignmentEvents();
   }
 
   /**
-   * 绑定九宫格锚点对齐、偏移量微调、洋葱皮开关与快捷键
+   * 绑定实时动画播放器按钮、滑块、下拉选择与键盘全局快捷键
+   */
+  bindPlayerControls() {
+    // 1. 播放/暂停按钮 (底栏主按钮与顶栏快捷按钮双向同步)
+    const handleTogglePlay = () => {
+      if (!this.player) return;
+      const willPlay = !this.player.isPlaying;
+      if (willPlay && (!this.player.frames || this.player.frames.length === 0)) {
+        this.setStatus('请先导入图片并添加或识别选框以播放动画');
+        return;
+      }
+      this.player.toggle();
+    };
+
+    if (this.btnPlayPause) {
+      this.btnPlayPause.addEventListener('click', handleTogglePlay);
+    }
+    if (this.btnTopPlayPause) {
+      this.btnTopPlayPause.addEventListener('click', handleTogglePlay);
+    }
+
+    // 2. 帧率 (FPS) 滑块与数值显示实时双向绑定 (1~60)
+    if (this.fpsSlider) {
+      this.fpsSlider.addEventListener('input', (e) => {
+        const fps = parseInt(e.target.value, 10) || 12;
+        if (this.player) this.player.setFPS(fps);
+        state.setPlayerState({ fps });
+        if (this.fpsDisplay) {
+          this.fpsDisplay.textContent = `${fps} FPS`;
+        }
+      });
+    }
+
+    // 3. 循环模式下拉菜单 (Loop / Once / Pingpong)
+    if (this.loopModeSelect) {
+      this.loopModeSelect.addEventListener('change', (e) => {
+        const mode = e.target.value;
+        if (this.player) this.player.setLoopMode(mode);
+        state.setPlayerState({ loopMode: mode });
+        const modeNames = { loop: '循环播放 (Loop)', once: '单次播放 (Once)', pingpong: '往返乒乓 (Ping-pong)' };
+        this.setStatus(`播放模式已更新为: ${modeNames[mode] || mode}`);
+      });
+    }
+
+    // 4. 首帧、末帧、上一帧、下一帧控制按钮
+    if (this.btnFirstFrame) {
+      this.btnFirstFrame.addEventListener('click', () => {
+        if (!this.player) return;
+        this.player.firstFrame();
+        const frame = this.player.getCurrentFrame();
+        if (frame) state.selectFrame(frame.id);
+        this.setStatus('已跳转至第一帧');
+      });
+    }
+
+    if (this.btnLastFrame) {
+      this.btnLastFrame.addEventListener('click', () => {
+        if (!this.player) return;
+        this.player.lastFrame();
+        const frame = this.player.getCurrentFrame();
+        if (frame) state.selectFrame(frame.id);
+        this.setStatus('已跳转至最后一帧');
+      });
+    }
+
+    if (this.btnPrevFrame) {
+      this.btnPrevFrame.addEventListener('click', () => {
+        if (!this.player) return;
+        this.player.prevFrame();
+        const frame = this.player.getCurrentFrame();
+        if (frame) state.selectFrame(frame.id);
+        this.setStatus(`单步上一帧 (第 ${this.player.currentFrameIndex + 1} 帧)`);
+      });
+    }
+
+    if (this.btnNextFrame) {
+      this.btnNextFrame.addEventListener('click', () => {
+        if (!this.player) return;
+        this.player.nextFrame();
+        const frame = this.player.getCurrentFrame();
+        if (frame) state.selectFrame(frame.id);
+        this.setStatus(`单步下一帧 (第 ${this.player.currentFrameIndex + 1} 帧)`);
+      });
+    }
+
+    // 5. 键盘全局快捷键：
+    //    - 空格键 (Space): 播放/暂停切换
+    //    - 逗号 (,) / 左箭头 (ArrowLeft, 暂停时且无 Shift): 上一帧
+    //    - 句号 (.) / 右箭头 (ArrowRight, 暂停时且无 Shift): 下一帧
+    //    - 方向键 (ArrowUp/Down/Left/Right 配合 Shift 或单独上下键): 1px / 10px 偏移量微调
+    window.addEventListener('keydown', (e) => {
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // 空格键：播放/暂停切换
+      if (e.code === 'Space') {
+        if (!e.repeat) {
+          e.preventDefault();
+          handleTogglePlay();
+        }
+        return;
+      }
+
+      // 逗号 (,) 或 <：单步上一帧 (暂停时)
+      if (e.key === ',' || e.key === '<') {
+        e.preventDefault();
+        if (this.player && !this.player.isPlaying) {
+          this.player.prevFrame();
+          const frame = this.player.getCurrentFrame();
+          if (frame) state.selectFrame(frame.id);
+          this.setStatus(`单步步退: 第 ${this.player.currentFrameIndex + 1} 帧`);
+        }
+        return;
+      }
+
+      // 句号 (.) 或 >：单步下一帧 (暂停时)
+      if (e.key === '.' || e.key === '>') {
+        e.preventDefault();
+        if (this.player && !this.player.isPlaying) {
+          this.player.nextFrame();
+          const frame = this.player.getCurrentFrame();
+          if (frame) state.selectFrame(frame.id);
+          this.setStatus(`单步步进: 第 ${this.player.currentFrameIndex + 1} 帧`);
+        }
+        return;
+      }
+
+      // 左箭头 (ArrowLeft) / 右箭头 (ArrowRight)：若处于暂停且未按 Shift，作为上一帧/下一帧快速切换
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.shiftKey) {
+        if (this.player && !this.player.isPlaying) {
+          e.preventDefault();
+          if (e.key === 'ArrowLeft') {
+            this.player.prevFrame();
+          } else {
+            this.player.nextFrame();
+          }
+          const frame = this.player.getCurrentFrame();
+          if (frame) state.selectFrame(frame.id);
+          this.setStatus(`单步切换: 第 ${this.player.currentFrameIndex + 1} 帧 (按 Shift+方向键可微调像素对齐)`);
+          return;
+        }
+      }
+
+      // 方向键 1px/10px 像素偏移量微调 (Shift + 左右箭头，或 上下箭头)
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        const selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) return;
+
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        let dx = 0;
+        let dy = 0;
+
+        if (e.key === 'ArrowLeft') dx = -step;
+        if (e.key === 'ArrowRight') dx = step;
+        if (e.key === 'ArrowUp') dy = -step;
+        if (e.key === 'ArrowDown') dy = step;
+
+        const newOffset = frameAlignment.nudgeOffset(selectedFrame, dx, dy);
+        state.updateFrame(selectedFrame.id, { offset: { ...newOffset } });
+
+        if (this.offsetXInput) this.offsetXInput.value = newOffset.x;
+        if (this.offsetYInput) this.offsetYInput.value = newOffset.y;
+
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.setStatus(`精确微调帧偏移量: X = ${newOffset.x}px, Y = ${newOffset.y}px (Shift 快速步进 10px)`);
+      }
+    });
+  }
+
+  /**
+   * 绑定九宫格锚点对齐、偏移量微调、洋葱皮开关与准星拖拽
    */
   bindAlignmentEvents() {
     // 1. 九宫格锚点按钮点击
@@ -390,68 +631,7 @@ class SpriteAnimatorApp {
       });
     }
 
-    // 5. 键盘方向键 (↑ ↓ ← →) 1px 精确微调 (Shift + 方向键 10px 快速微调)
-    window.addEventListener('keydown', (e) => {
-      const tag = e.target.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        const selectedFrame = state.getSelectedFrame();
-        if (!selectedFrame) return;
-
-        e.preventDefault();
-        const step = e.shiftKey ? 10 : 1;
-        let dx = 0;
-        let dy = 0;
-
-        if (e.key === 'ArrowLeft') dx = -step;
-        if (e.key === 'ArrowRight') dx = step;
-        if (e.key === 'ArrowUp') dy = -step;
-        if (e.key === 'ArrowDown') dy = step;
-
-        const newOffset = frameAlignment.nudgeOffset(selectedFrame, dx, dy);
-        state.updateFrame(selectedFrame.id, { offset: { ...newOffset } });
-
-        if (this.offsetXInput) this.offsetXInput.value = newOffset.x;
-        if (this.offsetYInput) this.offsetYInput.value = newOffset.y;
-
-        this.renderMainCanvas();
-        this.renderPlayerViewport();
-        this.setStatus(`精确微调帧偏移量: X = ${newOffset.x}px, Y = ${newOffset.y}px (按 Shift 快速步进 10px)`);
-      }
-    });
-
-    // 6. 播放器快捷步进切换帧按钮
-    const switchFrameStep = (delta) => {
-      const frames = state.get('frames') || [];
-      if (frames.length === 0) return;
-      const selectedId = state.get('selectedFrameId');
-      let curIdx = frames.findIndex(f => f.id === selectedId);
-      if (curIdx === -1) curIdx = 0;
-      const nextIdx = (curIdx + delta + frames.length) % frames.length;
-      state.selectFrame(frames[nextIdx].id);
-    };
-
-    if (this.btnFirstFrame) {
-      this.btnFirstFrame.addEventListener('click', () => {
-        const frames = state.get('frames') || [];
-        if (frames.length > 0) state.selectFrame(frames[0].id);
-      });
-    }
-    if (this.btnLastFrame) {
-      this.btnLastFrame.addEventListener('click', () => {
-        const frames = state.get('frames') || [];
-        if (frames.length > 0) state.selectFrame(frames[frames.length - 1].id);
-      });
-    }
-    if (this.btnPrevFrame) {
-      this.btnPrevFrame.addEventListener('click', () => switchFrameStep(-1));
-    }
-    if (this.btnNextFrame) {
-      this.btnNextFrame.addEventListener('click', () => switchFrameStep(1));
-    }
-
-    // 7. 帧视口 (playerCanvas) 红色十字准星拖拽调整锚点交互
+    // 5. 帧视口 (playerCanvas) 红色十字准星拖拽调整锚点交互
     this.bindPlayerCanvasPivotDrag();
   }
 
@@ -882,16 +1062,25 @@ class SpriteAnimatorApp {
 
     // 监听播放状态切换图标
     state.subscribe('playerState', (playerState) => {
-      if (this.playIcon) {
-        this.playIcon.textContent = playerState.isPlaying ? '⏸' : '▶';
-      }
+      this.updatePlayPauseUI(playerState.isPlaying);
       if (this.onionSkinToggle) {
         this.onionSkinToggle.checked = Boolean(playerState.onionSkin);
       }
       if (this.groundLineToggle) {
         this.groundLineToggle.checked = playerState.showGround !== false;
       }
-      this.renderPlayerViewport();
+      if (this.fpsSlider && playerState.fps !== undefined) {
+        this.fpsSlider.value = playerState.fps;
+      }
+      if (this.fpsDisplay && playerState.fps !== undefined) {
+        this.fpsDisplay.textContent = `${playerState.fps} FPS`;
+      }
+      if (this.loopModeSelect && playerState.loopMode) {
+        this.loopModeSelect.value = playerState.loopMode;
+      }
+      if (!this.player || !this.player.isPlaying) {
+        this.renderPlayerViewport();
+      }
     });
 
     // 监听视口变换，同步顶栏缩放比例显示与滑块
@@ -910,12 +1099,18 @@ class SpriteAnimatorApp {
       if (this.emptyPlaceholder) {
         this.emptyPlaceholder.style.display = img ? 'none' : 'flex';
       }
+      if (this.player) {
+        this.player.setSourceImage(img);
+      }
       this.renderFrameList();
       this.renderPlayerViewport();
     });
 
     // 监听帧列表变化更新缩略图列表
-    state.subscribe('frames', () => {
+    state.subscribe('frames', (frames) => {
+      if (this.player) {
+        this.player.setFrames(frames || []);
+      }
       this.renderFrameList();
       this.renderPlayerViewport();
     });
@@ -923,6 +1118,13 @@ class SpriteAnimatorApp {
     // 监听选中帧变化高亮
     state.subscribe('selectedFrameId', (selectedId) => {
       this.updateSelectedFrameUI(selectedId);
+      if (this.player && !this.player.isPlaying) {
+        const frames = state.get('frames') || [];
+        const idx = frames.findIndex(f => f.id === selectedId);
+        if (idx !== -1) {
+          this.player.goToFrame(idx);
+        }
+      }
       this.renderPlayerViewport();
     });
   }
@@ -1012,6 +1214,9 @@ class SpriteAnimatorApp {
     });
 
     this.updateSelectedFrameUI(selectedId);
+    if (this.player && this.player.isPlaying) {
+      this.highlightPlayingFrame(this.player.getCurrentFrameIndex());
+    }
   }
 
   /**

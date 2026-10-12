@@ -54,6 +54,11 @@
               </div>
             </div>
           </div>
+
+          <button class="btn btn-secondary" id="btn-top-play-pause" title="播放 / 暂停动画 (Space)">
+            <span id="top-play-icon">▶</span>
+            <span>播放</span>
+          </button>
         </div>
 
         <div class="toolbar-divider"></div>
@@ -152,10 +157,10 @@
         <!-- 底部快捷键与状态提示栏 -->
         <footer class="canvas-status-bar">
           <div class="shortcut-tip">
+            <span><kbd>Space</kbd>: 播放/暂停</span>
+            <span><kbd>,</kbd> / <kbd>.</kbd> 或 <kbd>←</kbd> <kbd>→</kbd>: 单步上一帧/下一帧</span>
             <span><kbd>Space</kbd> + 拖拽: 平移</span>
-            <span><kbd>滚轮</kbd>: 缩放</span>
-            <span><kbd>Delete</kbd>: 删除选中选框</span>
-            <span><kbd>↑↓←→</kbd>: 1px 微调对齐 (Shift: 10px)</span>
+            <span><kbd>Shift</kbd> + 方向键: 偏移微调</span>
           </div>
           <div id="status-message">就绪</div>
         </footer>
