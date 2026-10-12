@@ -7,6 +7,7 @@ import { state, eventBus } from './core/state.js';
 import { ImageProcessor, parseColor } from './core/image-processor.js';
 import { CanvasWorkspace } from './core/canvas-workspace.js';
 import { overlapIsolator } from './core/overlap-isolator.js';
+import { FrameAlignment, frameAlignment } from './core/frame-alignment.js';
 
 class SpriteAnimatorApp {
   constructor() {
@@ -62,12 +63,25 @@ class SpriteAnimatorApp {
     this.btnAddFrame = document.getElementById('btn-add-frame');
     this.btnClearFrames = document.getElementById('btn-clear-frames');
 
-    // 播放器控件
+    // 锚点与对齐控制
+    this.pivotGrid = document.getElementById('pivot-grid');
+    this.pivotDots = document.querySelectorAll('.pivot-dot');
+    this.offsetXInput = document.getElementById('offset-x');
+    this.offsetYInput = document.getElementById('offset-y');
+    this.onionSkinToggle = document.getElementById('onion-skin-toggle');
+    this.groundLineToggle = document.getElementById('ground-line-toggle');
+
+    // 播放器与视口控件
     this.btnPlayPause = document.getElementById('btn-play-pause');
     this.playIcon = document.getElementById('play-icon');
     this.fpsSlider = document.getElementById('fps-slider');
     this.fpsDisplay = document.getElementById('fps-display');
     this.loopModeSelect = document.getElementById('loop-mode-select');
+    this.playerFrameIndicator = document.getElementById('player-frame-indicator');
+    this.btnFirstFrame = document.getElementById('btn-first-frame');
+    this.btnPrevFrame = document.getElementById('btn-prev-frame');
+    this.btnNextFrame = document.getElementById('btn-next-frame');
+    this.btnLastFrame = document.getElementById('btn-last-frame');
 
     // 背景透明化模态框元素
     this.modalRemoveBg = document.getElementById('modal-remove-bg');
@@ -86,12 +100,15 @@ class SpriteAnimatorApp {
   initCanvasWorkspace() {
     if (this.mainCanvas && this.viewportContainer) {
       this.canvasWorkspace = new CanvasWorkspace(this.mainCanvas, this.viewportContainer);
+      this.canvasWorkspace.enableRectNudge = false; // 由 App 接管键盘方向键作为帧 offset 精确对齐微调
       this.canvasWorkspace.onFrameRectChange = (frameId) => {
         this.updateSelectedFrameUI(frameId);
         this.updateSingleThumbnail(frameId);
+        this.renderPlayerViewport();
       };
       this.canvasWorkspace.onFrameModified = (frameId) => {
         this.updateSingleThumbnail(frameId);
+        this.renderPlayerViewport();
         this.setStatus('当前帧局部像素已修整更新 (已记录历史快照，支持 Ctrl+Z 撤销 / Ctrl+Y 重做)');
       };
     }
@@ -294,6 +311,139 @@ class SpriteAnimatorApp {
         const isPlaying = !state.get('playerState').isPlaying;
         state.setPlayerState({ isPlaying });
       });
+    }
+
+    // 绑定九宫格锚点、偏移量输入、洋葱皮与键盘微调事件
+    this.bindAlignmentEvents();
+  }
+
+  /**
+   * 绑定九宫格锚点对齐、偏移量微调、洋葱皮开关与快捷键
+   */
+  bindAlignmentEvents() {
+    // 1. 九宫格锚点按钮点击
+    if (this.pivotDots) {
+      this.pivotDots.forEach(dot => {
+        dot.addEventListener('click', () => {
+          const pivotKey = dot.dataset.pivot;
+          const selectedFrame = state.getSelectedFrame();
+          if (!selectedFrame) {
+            this.setStatus('请先在帧列表中选择一个动作选框');
+            return;
+          }
+
+          frameAlignment.setPivotPreset(selectedFrame, pivotKey);
+          state.updateFrame(selectedFrame.id, { pivot: { ...selectedFrame.pivot } });
+
+          this.updatePivotGridUI(selectedFrame);
+          this.renderMainCanvas();
+          this.renderPlayerViewport();
+          this.setStatus(`当前帧锚点已设为: ${dot.getAttribute('title') || pivotKey}`);
+        });
+      });
+    }
+
+    // 2. X / Y 偏移量输入框双向绑定
+    const handleOffsetChange = () => {
+      const selectedFrame = state.getSelectedFrame();
+      if (!selectedFrame) return;
+
+      const x = parseFloat(this.offsetXInput ? this.offsetXInput.value : 0) || 0;
+      const y = parseFloat(this.offsetYInput ? this.offsetYInput.value : 0) || 0;
+
+      selectedFrame.offset = { x, y };
+      state.updateFrame(selectedFrame.id, { offset: { x, y } });
+
+      this.renderMainCanvas();
+      this.renderPlayerViewport();
+    };
+
+    if (this.offsetXInput) {
+      this.offsetXInput.addEventListener('input', handleOffsetChange);
+      this.offsetXInput.addEventListener('change', handleOffsetChange);
+    }
+    if (this.offsetYInput) {
+      this.offsetYInput.addEventListener('input', handleOffsetChange);
+      this.offsetYInput.addEventListener('change', handleOffsetChange);
+    }
+
+    // 3. 洋葱皮开关联动
+    if (this.onionSkinToggle) {
+      this.onionSkinToggle.addEventListener('change', (e) => {
+        state.setPlayerState({ onionSkin: e.target.checked });
+        this.renderPlayerViewport();
+        this.setStatus(e.target.checked ? '已开启洋葱皮残影 (前帧淡红，后帧淡蓝)' : '已关闭洋葱皮残影');
+      });
+    }
+
+    // 4. 地面参考线开关联动
+    if (this.groundLineToggle) {
+      this.groundLineToggle.addEventListener('change', (e) => {
+        state.setPlayerState({ showGround: e.target.checked });
+        this.renderPlayerViewport();
+        this.setStatus(e.target.checked ? '已开启地面水平参考基准线' : '已关闭地面参考线');
+      });
+    }
+
+    // 5. 键盘方向键 (↑ ↓ ← →) 1px 精确微调 (Shift + 方向键 10px 快速微调)
+    window.addEventListener('keydown', (e) => {
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        const selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) return;
+
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        let dx = 0;
+        let dy = 0;
+
+        if (e.key === 'ArrowLeft') dx = -step;
+        if (e.key === 'ArrowRight') dx = step;
+        if (e.key === 'ArrowUp') dy = -step;
+        if (e.key === 'ArrowDown') dy = step;
+
+        const newOffset = frameAlignment.nudgeOffset(selectedFrame, dx, dy);
+        state.updateFrame(selectedFrame.id, { offset: { ...newOffset } });
+
+        if (this.offsetXInput) this.offsetXInput.value = newOffset.x;
+        if (this.offsetYInput) this.offsetYInput.value = newOffset.y;
+
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.setStatus(`精确微调帧偏移量: X = ${newOffset.x}px, Y = ${newOffset.y}px (按 Shift 快速步进 10px)`);
+      }
+    });
+
+    // 6. 播放器快捷步进切换帧按钮
+    const switchFrameStep = (delta) => {
+      const frames = state.get('frames') || [];
+      if (frames.length === 0) return;
+      const selectedId = state.get('selectedFrameId');
+      let curIdx = frames.findIndex(f => f.id === selectedId);
+      if (curIdx === -1) curIdx = 0;
+      const nextIdx = (curIdx + delta + frames.length) % frames.length;
+      state.selectFrame(frames[nextIdx].id);
+    };
+
+    if (this.btnFirstFrame) {
+      this.btnFirstFrame.addEventListener('click', () => {
+        const frames = state.get('frames') || [];
+        if (frames.length > 0) state.selectFrame(frames[0].id);
+      });
+    }
+    if (this.btnLastFrame) {
+      this.btnLastFrame.addEventListener('click', () => {
+        const frames = state.get('frames') || [];
+        if (frames.length > 0) state.selectFrame(frames[frames.length - 1].id);
+      });
+    }
+    if (this.btnPrevFrame) {
+      this.btnPrevFrame.addEventListener('click', () => switchFrameStep(-1));
+    }
+    if (this.btnNextFrame) {
+      this.btnNextFrame.addEventListener('click', () => switchFrameStep(1));
     }
   }
 
@@ -576,6 +726,13 @@ class SpriteAnimatorApp {
       if (this.playIcon) {
         this.playIcon.textContent = playerState.isPlaying ? '⏸' : '▶';
       }
+      if (this.onionSkinToggle) {
+        this.onionSkinToggle.checked = Boolean(playerState.onionSkin);
+      }
+      if (this.groundLineToggle) {
+        this.groundLineToggle.checked = playerState.showGround !== false;
+      }
+      this.renderPlayerViewport();
     });
 
     // 监听视口变换，同步顶栏缩放比例显示与滑块
@@ -595,16 +752,19 @@ class SpriteAnimatorApp {
         this.emptyPlaceholder.style.display = img ? 'none' : 'flex';
       }
       this.renderFrameList();
+      this.renderPlayerViewport();
     });
 
     // 监听帧列表变化更新缩略图列表
     state.subscribe('frames', () => {
       this.renderFrameList();
+      this.renderPlayerViewport();
     });
 
     // 监听选中帧变化高亮
     state.subscribe('selectedFrameId', (selectedId) => {
       this.updateSelectedFrameUI(selectedId);
+      this.renderPlayerViewport();
     });
   }
 
@@ -715,6 +875,78 @@ class SpriteAnimatorApp {
         this.currentFrameInfoBadge.textContent = '选框: 无';
       }
     }
+
+    // 联动同步右侧侧边栏九宫格按钮高亮与偏移量输入框
+    this.updatePivotGridUI(frame);
+    this.updateOffsetUI(frame);
+    this.renderPlayerViewport();
+  }
+
+  /**
+   * 根据当前帧的相对锚点自动更新右侧九宫格按钮高亮
+   * @param {Object|null} frame 
+   */
+  updatePivotGridUI(frame) {
+    if (!this.pivotDots) return;
+    if (!frame) {
+      this.pivotDots.forEach(dot => dot.classList.remove('active'));
+      return;
+    }
+
+    const activePresetKey = frameAlignment.getPivotPresetKey(frame); // 如 'bottom-center'
+    this.pivotDots.forEach(dot => {
+      const dotKey = dot.dataset.pivot;
+      dot.classList.toggle('active', dotKey === activePresetKey);
+    });
+  }
+
+  /**
+   * 同步 X / Y 偏移量输入框数值
+   * @param {Object|null} frame 
+   */
+  updateOffsetUI(frame) {
+    if (this.offsetXInput) {
+      this.offsetXInput.value = frame?.offset ? (frame.offset.x || 0) : 0;
+    }
+    if (this.offsetYInput) {
+      this.offsetYInput.value = frame?.offset ? (frame.offset.y || 0) : 0;
+    }
+  }
+
+  /**
+   * 渲染实时动画播放器与对齐视口舞台 (包含洋葱皮残影、地面参考基准线与锚点十字星)
+   */
+  renderPlayerViewport() {
+    if (!this.playerCanvas) return;
+    const frames = state.get('frames') || [];
+    const selectedId = state.get('selectedFrameId');
+    const sourceImage = state.get('sourceImage');
+    const playerState = state.get('playerState') || {};
+
+    let currentIndex = frames.findIndex(f => f.id === selectedId);
+    if (currentIndex === -1 && frames.length > 0) {
+      currentIndex = 0;
+    }
+
+    const currentFrame = currentIndex >= 0 ? frames[currentIndex] : null;
+
+    // 更新底部帧索引指示器 (例如 "3 / 10")
+    if (this.playerFrameIndicator) {
+      if (frames.length > 0 && currentIndex >= 0) {
+        this.playerFrameIndicator.textContent = `${currentIndex + 1} / ${frames.length}`;
+      } else {
+        this.playerFrameIndicator.textContent = '0 / 0';
+      }
+    }
+
+    frameAlignment.renderAlignmentStage(
+      this.playerCanvas,
+      currentFrame,
+      frames,
+      currentIndex,
+      sourceImage,
+      playerState
+    );
   }
 
   /**
@@ -728,21 +960,7 @@ class SpriteAnimatorApp {
   }
 
   initCanvas() {
-    if (this.playerCanvas) {
-      const ctx = this.playerCanvas.getContext('2d');
-      if (ctx) {
-        ctx.clearRect(0, 0, this.playerCanvas.width, this.playerCanvas.height);
-        ctx.strokeStyle = 'rgba(58, 134, 255, 0.4)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        const groundY = this.playerCanvas.height * 0.85;
-        ctx.beginPath();
-        ctx.moveTo(0, groundY);
-        ctx.lineTo(this.playerCanvas.width, groundY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    }
+    this.renderPlayerViewport();
   }
 }
 

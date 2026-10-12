@@ -53,6 +53,9 @@ export class CanvasWorkspace {
     this.onFrameRectChange = null; // (frameId, rect) => void
     this.onFrameModified = null; // (frameId) => void
 
+    // 是否启用默认选框 rect 键盘微调 (上层应用可置 false 接管为帧 offset 对齐微调)
+    this.enableRectNudge = true;
+
     this.init();
   }
 
@@ -973,7 +976,7 @@ export class CanvasWorkspace {
       }
 
       // 5. 方向键微调位置 (↑ ↓ ← →)
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      if (this.enableRectNudge && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         const selectedFrame = state.getSelectedFrame();
         if (selectedFrame) {
           e.preventDefault();
