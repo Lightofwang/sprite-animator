@@ -613,6 +613,40 @@ body {
   text-overflow: ellipsis;
 }
 
+/* 缩略图右上角单帧删除按钮 */
+.frame-item-del-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  background: rgba(239, 71, 111, 0.85);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background-color 0.15s, transform 0.15s;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.frame-item:hover .frame-item-del-btn {
+  opacity: 1;
+}
+
+.frame-item-del-btn:hover {
+  background: #ff0055;
+  transform: scale(1.18);
+  box-shadow: 0 0 6px rgba(255, 0, 85, 0.6);
+}
+
 .frame-actions-hover {
   position: absolute;
   top: 2px;
@@ -1063,6 +1097,9 @@ body {
               <button class="btn btn-icon btn-secondary" id="btn-add-frame" title="添加新选框">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
+              <button class="btn btn-icon btn-secondary" id="btn-delete-frame" title="删除当前选中的单帧 (Delete)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
               <button class="btn btn-icon btn-danger" id="btn-clear-frames" title="清空全部选框">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               </button>
@@ -1072,6 +1109,31 @@ body {
           <!-- 帧缩略图序列网格 -->
           <div class="frame-list-wrapper" id="frame-list">
             <!-- 动态注入帧缩略图卡片 -->
+          </div>
+
+          <!-- 选框尺寸与统一规格卡片 -->
+          <div class="alignment-controls-card box-size-controls-card">
+            <div class="control-row">
+              <span class="label-title">选框尺寸 (W × H)</span>
+              <div class="offset-inputs">
+                <div class="coord-field">
+                  <span>宽:</span>
+                  <input type="number" id="frame-w" min="4" placeholder="宽" title="当前帧选框宽度 (Enter应用)">
+                </div>
+                <div class="coord-field">
+                  <span>高:</span>
+                  <input type="number" id="frame-h" min="4" placeholder="高" title="当前帧选框高度 (Enter应用)">
+                </div>
+              </div>
+            </div>
+            <div class="control-row" style="margin-top: 6px; display: flex; gap: 6px;">
+              <button class="btn btn-secondary btn-sm" id="btn-unify-size" style="flex: 1;" title="将全部选框尺寸统一为相同大小（以脚底中心对齐）">
+                📐 统一全部尺寸
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-grid-slice" style="flex: 1;" title="按行与列生成均等网格选框">
+                ⊞ 网格等分切片
+              </button>
+            </div>
           </div>
 
           <!-- 锚点与对齐控制卡片 -->
@@ -1124,10 +1186,17 @@ body {
           <div class="section-header">
             <span>实时动画播放器</span>
             <div class="actions">
-              <select class="select-input" id="loop-mode-select" title="播放循环模式">
-                <option value="loop">循环播放 (Loop)</option>
-                <option value="once">单次播放 (Once)</option>
-                <option value="pingpong">往返乒乓 (Ping-pong)</option>
+              <select class="select-input" id="player-zoom-select" title="播放器画面显示比例" style="max-width: 100px;">
+                <option value="auto">自适应完整</option>
+                <option value="1.0">100% 原始</option>
+                <option value="0.75">75%</option>
+                <option value="0.5">50%</option>
+                <option value="0.35">35%</option>
+              </select>
+              <select class="select-input" id="loop-mode-select" title="播放循环模式" style="max-width: 110px;">
+                <option value="loop">循环播放</option>
+                <option value="once">单次播放</option>
+                <option value="pingpong">往返乒乓</option>
               </select>
             </div>
           </div>
@@ -1222,10 +1291,92 @@ body {
           <div id="export-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-blue), var(--accent-green)); transition: width 0.15s ease;"></div>
         </div>
       </div>
+  <!-- 统一选框尺寸模态框 -->
+  <div class="modal-overlay" id="modal-unify-size">
+    <div class="modal-box" style="width: 420px;">
+      <div class="modal-header">
+        <span>一键统一全部选框尺寸 (Uniform Frame Sizes)</span>
+        <button class="btn btn-icon btn-secondary" id="btn-close-unify-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 12px; color: var(--text-sub); line-height: 1.5;">
+          将所有动作帧调整为一模一样的大小。调整时将自动锚定脚底中心，确保角色地面位置丝毫不偏：
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="unify-source" id="radio-unify-selected" value="selected" checked>
+            <span>以当前选中帧尺寸为基准 (<strong id="label-selected-size">0 × 0</strong>)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="unify-source" id="radio-unify-max" value="max">
+            <span>以全部选框的最大包围尺寸 (<strong id="label-max-size">0 × 0</strong>)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="unify-source" id="radio-unify-custom" value="custom">
+            <span>自定义指定尺寸</span>
+          </label>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center; padding-left: 24px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>宽度:</span>
+            <input type="number" id="unify-custom-w" min="10" max="4096" value="512" style="width: 70px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <span>px</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>高度:</span>
+            <input type="number" id="unify-custom-h" min="10" max="4096" value="384" style="width: 70px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <span>px</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+          <label style="width: 80px; font-weight: 500;">对齐基准:</label>
+          <select id="unify-align-anchor" class="select-input" style="flex: 1;">
+            <option value="bottom-center" selected>底部中心 (脚底地面不动，四周向上延展)</option>
+            <option value="center">正中心 (原中心不动，向四周对称延展)</option>
+            <option value="top-left">左上角 (左上角不动)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-unify">取消</button>
+        <button class="btn btn-primary" id="btn-confirm-unify">确定统一尺寸</button>
+      </div>
     </div>
   </div>
 
-  <!-- 引入第三方依赖库与核心主入口模块 -->
+  <!-- 均等网格切片模态框 -->
+  <div class="modal-overlay" id="modal-grid-slice">
+    <div class="modal-box" style="width: 400px;">
+      <div class="modal-header">
+        <span>均等网格自动切片 (Grid Slicer)</span>
+        <button class="btn btn-icon btn-secondary" id="btn-close-grid-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 12px; color: var(--text-sub); line-height: 1.5;">
+          按照指定的行数和列数，在原图上生成一整套完全等大的网格选框：
+        </div>
+        <div style="display: flex; gap: 16px; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+            <label style="width: 40px;">行数:</label>
+            <input type="number" id="grid-rows-input" min="1" max="50" value="3" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <span style="color: var(--text-sub); font-size: 12px;">行</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+            <label style="width: 40px;">列数:</label>
+            <input type="number" id="grid-cols-input" min="1" max="50" value="4" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <span style="color: var(--text-sub); font-size: 12px;">列</span>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: var(--accent-yellow); background: rgba(255, 209, 102, 0.1); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 209, 102, 0.2);">
+          💡 提示：生成网格将覆盖当前全部选框。每个单元格尺寸将自动均等计算。
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-grid">取消</button>
+        <button class="btn btn-primary" id="btn-confirm-grid">生成网格切片</button>
+      </div>
+    </div>
+  </div>
   
   
   
@@ -3851,6 +4002,59 @@ class FrameAlignment {
    * @param {HTMLImageElement|null} sourceImage 原始大图
    * @param {Object} displayConfig 显示配置 { showGround, onionSkin, showPivot, onionSkinOpacity }
    */
+  /**
+   * 计算视口舞台的最佳缩放比 (自适应完整展示整个人物与武器)
+   * @param {number} canvasWidth 
+   * @param {number} canvasHeight 
+   * @param {Array<Object>} allFrames 
+   * @param {Object|null} currentFrame 
+   * @param {number|string} userZoom 'auto' 或 具体倍率数字
+   * @returns {number}
+   */
+  calculateStageScale(canvasWidth, canvasHeight, allFrames = [], currentFrame = null, userZoom = 'auto') {
+    if (typeof userZoom === 'number' && userZoom > 0) {
+      return userZoom;
+    }
+    if (typeof userZoom === 'string' && userZoom !== 'auto') {
+      const parsed = parseFloat(userZoom);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+
+    // 自适应 Auto Fit 逻辑
+    let maxW = currentFrame?.rect?.w || 0;
+    let maxH = currentFrame?.rect?.h || 0;
+
+    if (Array.isArray(allFrames)) {
+      allFrames.forEach(f => {
+        if (f && f.rect) {
+          if (f.rect.w > maxW) maxW = f.rect.w;
+          if (f.rect.h > maxH) maxH = f.rect.h;
+        }
+      });
+    }
+
+    if (maxW <= 0 || maxH <= 0) return 1.0;
+
+    // 可用区域：宽度预留 15% 边距，高度从脚底 82% 向上预留 6% 边距即 76%
+    const availW = canvasWidth * 0.85;
+    const availH = canvasHeight * 0.76;
+
+    const scaleW = availW / maxW;
+    const scaleH = availH / maxH;
+    const fitScale = Math.min(scaleW, scaleH);
+
+    return Math.min(1.0, fitScale);
+  }
+
+  /**
+   * 渲染对齐工作台/播放器视口 (包含洋葱皮、自适应缩放、地面参考线与锚点准星)
+   * @param {HTMLCanvasElement} canvas 目标视口 Canvas
+   * @param {Object|null} currentFrame 当前帧对象
+   * @param {Array<Object>} allFrames 全部帧列表
+   * @param {number} currentIndex 当前帧索引
+   * @param {HTMLImageElement|null} sourceImage 原始大图
+   * @param {Object} displayConfig 显示配置 { showGround, onionSkin, showPivot, onionSkinOpacity, zoom }
+   */
   renderAlignmentStage(canvas, currentFrame, allFrames = [], currentIndex = 0, sourceImage = null, displayConfig = {}) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -3865,6 +4069,12 @@ class FrameAlignment {
     // 计算地面与锚点基准坐标：水平居中，脚底基准线位于画布高 82% 处
     const targetBaseX = Math.round(width / 2);
     const targetBaseY = Math.round(height * 0.82);
+
+    // 计算视口缩放比
+    const scale = this.calculateStageScale(width, height, allFrames, currentFrame, displayConfig.zoom);
+    this.lastRenderScale = scale;
+    this.lastTargetBaseX = targetBaseX;
+    this.lastTargetBaseY = targetBaseY;
 
     const showGround = displayConfig.showGround !== false;
     const showPivot = displayConfig.showPivot !== false;
@@ -3891,57 +4101,63 @@ class FrameAlignment {
       ctx.restore();
     }
 
-    // 2. 绘制洋葱皮残影 (如果开启)
+    // 2 & 3. 绘制洋葱皮残影与当前主体帧 (应用缩放变换)
+    ctx.save();
+    ctx.translate(targetBaseX, targetBaseY);
+    ctx.scale(scale, scale);
+
+    // 洋葱皮残影 (在局部坐标系以 (0, 0) 为脚底基准对齐)
     if (showOnion && allFrames.length > 1) {
       const onionList = this.getOnionSkinFrames(allFrames, currentIndex, 1, 1);
       const userAlpha = typeof displayConfig.onionSkinOpacity === 'number' ? displayConfig.onionSkinOpacity : 0.30;
 
       onionList.forEach(item => {
-        this.renderFrameToContext(ctx, item.frame, sourceImage, targetBaseX, targetBaseY, {
+        this.renderFrameToContext(ctx, item.frame, sourceImage, 0, 0, {
           alpha: userAlpha,
           tint: item.color
         });
       });
     }
 
-    // 3. 绘制当前主体帧 (不透明、真实色彩)
+    // 当前主体帧 (在局部坐标系以 (0, 0) 为脚底基准对齐)
     if (currentFrame) {
-      this.renderFrameToContext(ctx, currentFrame, sourceImage, targetBaseX, targetBaseY, {
+      this.renderFrameToContext(ctx, currentFrame, sourceImage, 0, 0, {
         alpha: 1.0,
         tint: null
       });
+    }
+    ctx.restore();
 
-      // 4. 绘制当前帧的锚点十字准星
-      if (showPivot) {
-        ctx.save();
-        const ox = currentFrame.offset ? (currentFrame.offset.x || 0) : 0;
-        const oy = currentFrame.offset ? (currentFrame.offset.y || 0) : 0;
-        const pivotScreenX = targetBaseX + ox;
-        const pivotScreenY = targetBaseY + oy;
+    // 4. 绘制当前帧的锚点十字准星 (在屏幕绝对像素空间，保持准星清晰度)
+    if (currentFrame && showPivot) {
+      ctx.save();
+      const ox = currentFrame.offset ? (currentFrame.offset.x || 0) : 0;
+      const oy = currentFrame.offset ? (currentFrame.offset.y || 0) : 0;
+      const pivotScreenX = targetBaseX + ox * scale;
+      const pivotScreenY = targetBaseY + oy * scale;
 
-        // 准星红色外圆
-        ctx.strokeStyle = '#ff006e';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(pivotScreenX, pivotScreenY, 6, 0, Math.PI * 2);
-        ctx.stroke();
+      // 准星红色外圆
+      ctx.strokeStyle = '#ff006e';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(pivotScreenX, pivotScreenY, 6, 0, Math.PI * 2);
+      ctx.stroke();
 
-        // 准星十字交叉线
-        ctx.beginPath();
-        ctx.moveTo(pivotScreenX - 10, pivotScreenY);
-        ctx.lineTo(pivotScreenX + 10, pivotScreenY);
-        ctx.moveTo(pivotScreenX, pivotScreenY - 10);
-        ctx.lineTo(pivotScreenX, pivotScreenY + 10);
-        ctx.stroke();
+      // 准星十字交叉线
+      ctx.beginPath();
+      ctx.moveTo(pivotScreenX - 10, pivotScreenY);
+      ctx.lineTo(pivotScreenX + 10, pivotScreenY);
+      ctx.moveTo(pivotScreenX, pivotScreenY - 10);
+      ctx.lineTo(pivotScreenX, pivotScreenY + 10);
+      ctx.stroke();
 
-        // 准星中心白点
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(pivotScreenX, pivotScreenY, 2, 0, Math.PI * 2);
-        ctx.fill();
+      // 准星中心白点
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(pivotScreenX, pivotScreenY, 2, 0, Math.PI * 2);
+      ctx.fill();
 
-        ctx.restore();
-      }
+      ctx.restore();
     }
   }
 }
@@ -6523,7 +6739,34 @@ class SpriteAnimatorApp {
     this.frameCountBadge = document.getElementById('frame-count-badge');
     this.frameList = document.getElementById('frame-list');
     this.btnAddFrame = document.getElementById('btn-add-frame');
+    this.btnDeleteFrame = document.getElementById('btn-delete-frame');
     this.btnClearFrames = document.getElementById('btn-clear-frames');
+    this.frameWInput = document.getElementById('frame-w');
+    this.frameHInput = document.getElementById('frame-h');
+    this.btnUnifySize = document.getElementById('btn-unify-size');
+    this.btnGridSlice = document.getElementById('btn-grid-slice');
+    this.playerZoomSelect = document.getElementById('player-zoom-select');
+
+    // 统一尺寸与网格切片模态框元素
+    this.modalUnifySize = document.getElementById('modal-unify-size');
+    this.btnCloseUnifyModal = document.getElementById('btn-close-unify-modal');
+    this.btnCancelUnify = document.getElementById('btn-cancel-unify');
+    this.btnConfirmUnify = document.getElementById('btn-confirm-unify');
+    this.radioUnifySelected = document.getElementById('radio-unify-selected');
+    this.radioUnifyMax = document.getElementById('radio-unify-max');
+    this.radioUnifyCustom = document.getElementById('radio-unify-custom');
+    this.labelSelectedSize = document.getElementById('label-selected-size');
+    this.labelMaxSize = document.getElementById('label-max-size');
+    this.unifyCustomW = document.getElementById('unify-custom-w');
+    this.unifyCustomH = document.getElementById('unify-custom-h');
+    this.unifyAlignAnchor = document.getElementById('unify-align-anchor');
+
+    this.modalGridSlice = document.getElementById('modal-grid-slice');
+    this.btnCloseGridModal = document.getElementById('btn-close-grid-modal');
+    this.btnCancelGrid = document.getElementById('btn-cancel-grid');
+    this.btnConfirmGrid = document.getElementById('btn-confirm-grid');
+    this.gridRowsInput = document.getElementById('grid-rows-input');
+    this.gridColsInput = document.getElementById('grid-cols-input');
 
     // 锚点与对齐控制
     this.pivotGrid = document.getElementById('pivot-grid');
@@ -6750,11 +6993,89 @@ class SpriteAnimatorApp {
       });
     }
 
+    // 删除当前选中单帧
+    if (this.btnDeleteFrame) {
+      this.btnDeleteFrame.addEventListener('click', () => {
+        const selectedId = state.get('selectedFrameId');
+        if (!selectedId) {
+          this.setStatus('请先在帧列表中选择要删除的单帧');
+          return;
+        }
+        const frame = state.getSelectedFrame();
+        state.removeFrame(selectedId);
+        this.setStatus(`已删除单帧: ${frame?.name || selectedId}`);
+      });
+    }
+
     if (this.btnClearFrames) {
       this.btnClearFrames.addEventListener('click', () => {
         if (state.get('frames').length === 0) return;
         state.setState({ frames: [], selectedFrameId: null });
         this.setStatus('已清空所有选框');
+      });
+    }
+
+    // 选框尺寸 (W × H) 实时编辑
+    const handleFrameDimensionChange = () => {
+      const selectedFrame = state.getSelectedFrame();
+      if (!selectedFrame) return;
+
+      let newW = parseInt(this.frameWInput?.value, 10);
+      let newH = parseInt(this.frameHInput?.value, 10);
+      if (isNaN(newW) || newW < 1) newW = selectedFrame.rect.w;
+      if (isNaN(newH) || newH < 1) newH = selectedFrame.rect.h;
+
+      if (newW === selectedFrame.rect.w && newH === selectedFrame.rect.h) return;
+
+      // 默认以脚底中心对齐扩展/收缩
+      const oldRect = selectedFrame.rect;
+      const cx = oldRect.x + oldRect.w / 2;
+      const by = oldRect.y + oldRect.h;
+      const newX = Math.round(cx - newW / 2);
+      const newY = Math.round(by - newH);
+
+      state.updateFrame(selectedFrame.id, {
+        rect: { x: newX, y: newY, w: newW, h: newH }
+      });
+
+      // 如果有隔离画布，需要以新尺寸重置
+      if (selectedFrame.maskCanvas) {
+        const sourceImage = state.get('sourceImage');
+        if (sourceImage) {
+          overlapIsolator.initFrameCanvas(selectedFrame, sourceImage);
+        }
+      }
+
+      this.renderMainCanvas();
+      this.updateSingleThumbnail(selectedFrame.id);
+      this.renderPlayerViewport();
+      this.setStatus(`当前帧尺寸已更新为: ${newW} × ${newH} px`);
+    };
+
+    if (this.frameWInput) {
+      this.frameWInput.addEventListener('change', handleFrameDimensionChange);
+      this.frameWInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleFrameDimensionChange();
+      });
+    }
+    if (this.frameHInput) {
+      this.frameHInput.addEventListener('change', handleFrameDimensionChange);
+      this.frameHInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleFrameDimensionChange();
+      });
+    }
+
+    // 统一尺寸与网格切片弹窗逻辑绑定
+    this.bindUnifySizeModal();
+    this.bindGridSliceModal();
+
+    // 播放器视口缩放模式下拉选择
+    if (this.playerZoomSelect) {
+      this.playerZoomSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        state.setPlayerState({ viewportScaleMode: val });
+        this.renderPlayerViewport();
+        this.setStatus(`视口缩放模式已设为: ${e.target.options[e.target.selectedIndex]?.text || val}`);
       });
     }
 
@@ -7133,9 +7454,6 @@ class SpriteAnimatorApp {
       if (this.isNearCrosshair(mousePos, crosshairPos, 10)) {
         this.isDraggingPivot = true;
         this.draggedFrame = selectedFrame;
-        const targetBaseX = Math.round(this.playerCanvas.width / 2);
-        const targetBaseY = Math.round(this.playerCanvas.height * 0.82);
-        this.pivotDragOrigin = frameAlignment.calculateWorldRenderPos(selectedFrame, targetBaseX, targetBaseY);
         this.playerCanvas.style.cursor = 'crosshair';
         e.preventDefault();
       }
@@ -7145,10 +7463,15 @@ class SpriteAnimatorApp {
     this.playerCanvas.addEventListener('mousemove', (e) => {
       const mousePos = this.getPlayerCanvasMousePos(e);
 
-      if (this.isDraggingPivot && this.draggedFrame && this.pivotDragOrigin) {
+      if (this.isDraggingPivot && this.draggedFrame) {
         const selectedFrame = this.draggedFrame;
-        const pixelX = mousePos.x - this.pivotDragOrigin.dx;
-        const pixelY = mousePos.y - this.pivotDragOrigin.dy;
+        const targetBaseX = Math.round(this.playerCanvas.width / 2);
+        const targetBaseY = Math.round(this.playerCanvas.height * 0.82);
+        const scale = frameAlignment.lastRenderScale || 1.0;
+        const localOrigin = frameAlignment.calculateWorldRenderPos(selectedFrame, 0, 0);
+
+        const pixelX = (mousePos.x - targetBaseX) / scale - localOrigin.dx;
+        const pixelY = (mousePos.y - targetBaseY) / scale - localOrigin.dy;
 
         frameAlignment.setCustomPivot(selectedFrame, pixelX, pixelY);
         state.updateFrame(selectedFrame.id, { pivot: { ...selectedFrame.pivot } });
@@ -7235,7 +7558,7 @@ class SpriteAnimatorApp {
   }
 
   /**
-   * 获取当前帧在 playerCanvas 视口中的十字准星屏幕像素坐标
+   * 获取当前帧在 playerCanvas 视口中的十字准星屏幕像素坐标 (自适应缩放)
    * @param {Object} frame 
    * @returns {{x: number, y: number}}
    */
@@ -7243,11 +7566,12 @@ class SpriteAnimatorApp {
     if (!this.playerCanvas) return { x: 0, y: 0 };
     const targetBaseX = Math.round(this.playerCanvas.width / 2);
     const targetBaseY = Math.round(this.playerCanvas.height * 0.82);
+    const scale = frameAlignment.lastRenderScale || 1.0;
     const ox = frame?.offset ? (frame.offset.x || 0) : 0;
     const oy = frame?.offset ? (frame.offset.y || 0) : 0;
     return {
-      x: targetBaseX + ox,
-      y: targetBaseY + oy
+      x: targetBaseX + ox * scale,
+      y: targetBaseY + oy * scale
     };
   }
 
@@ -7686,6 +8010,179 @@ class SpriteAnimatorApp {
   }
 
   /**
+   * 绑定统一选框尺寸模态框事件
+   */
+  bindUnifySizeModal() {
+    if (this.btnUnifySize) {
+      this.btnUnifySize.addEventListener('click', () => {
+        const frames = state.get('frames') || [];
+        if (frames.length === 0) {
+          this.setStatus('暂无动作帧，请先导入图片并添加选框');
+          return;
+        }
+
+        const selectedFrame = state.getSelectedFrame();
+        let maxW = 0;
+        let maxH = 0;
+        frames.forEach(f => {
+          if (f.rect.w > maxW) maxW = f.rect.w;
+          if (f.rect.h > maxH) maxH = f.rect.h;
+        });
+
+        if (this.labelSelectedSize) {
+          this.labelSelectedSize.textContent = selectedFrame
+            ? `${selectedFrame.rect.w} × ${selectedFrame.rect.h} px`
+            : '未选择 (建议先在列表中点击一帧)';
+        }
+        if (this.labelMaxSize) {
+          this.labelMaxSize.textContent = `${maxW} × ${maxH} px`;
+        }
+        if (this.unifyCustomW && this.unifyCustomH) {
+          this.unifyCustomW.value = selectedFrame ? selectedFrame.rect.w : maxW;
+          this.unifyCustomH.value = selectedFrame ? selectedFrame.rect.h : maxH;
+        }
+
+        if (this.modalUnifySize) this.modalUnifySize.classList.add('active');
+      });
+    }
+
+    const closeUnifyModal = () => {
+      if (this.modalUnifySize) this.modalUnifySize.classList.remove('active');
+    };
+
+    if (this.btnCloseUnifyModal) this.btnCloseUnifyModal.addEventListener('click', closeUnifyModal);
+    if (this.btnCancelUnify) this.btnCancelUnify.addEventListener('click', closeUnifyModal);
+
+    if (this.btnConfirmUnify) {
+      this.btnConfirmUnify.addEventListener('click', () => {
+        const frames = state.get('frames') || [];
+        if (frames.length === 0) return;
+
+        const selectedFrame = state.getSelectedFrame();
+        let maxW = 0;
+        let maxH = 0;
+        frames.forEach(f => {
+          if (f.rect.w > maxW) maxW = f.rect.w;
+          if (f.rect.h > maxH) maxH = f.rect.h;
+        });
+
+        let targetW = 64;
+        let targetH = 64;
+
+        if (this.radioUnifySelected && this.radioUnifySelected.checked) {
+          if (selectedFrame) {
+            targetW = selectedFrame.rect.w;
+            targetH = selectedFrame.rect.h;
+          } else {
+            targetW = maxW;
+            targetH = maxH;
+          }
+        } else if (this.radioUnifyMax && this.radioUnifyMax.checked) {
+          targetW = maxW;
+          targetH = maxH;
+        } else if (this.radioUnifyCustom && this.radioUnifyCustom.checked) {
+          targetW = Math.max(1, parseInt(this.unifyCustomW?.value, 10) || 64);
+          targetH = Math.max(1, parseInt(this.unifyCustomH?.value, 10) || 64);
+        }
+
+        const anchor = this.unifyAlignAnchor ? this.unifyAlignAnchor.value : 'bottom-center';
+        const sourceImage = state.get('sourceImage');
+
+        frames.forEach(frame => {
+          const oldRect = frame.rect;
+          let newX = oldRect.x;
+          let newY = oldRect.y;
+
+          if (anchor === 'bottom-center') {
+            const cx = oldRect.x + oldRect.w / 2;
+            const by = oldRect.y + oldRect.h;
+            newX = Math.round(cx - targetW / 2);
+            newY = Math.round(by - targetH);
+          } else if (anchor === 'center') {
+            const cx = oldRect.x + oldRect.w / 2;
+            const cy = oldRect.y + oldRect.h / 2;
+            newX = Math.round(cx - targetW / 2);
+            newY = Math.round(cy - targetH / 2);
+          } // top-left 保持 newX, newY 不变
+
+          frame.rect = { x: newX, y: newY, w: targetW, h: targetH };
+          if (frame.maskCanvas && sourceImage) {
+            overlapIsolator.initFrameCanvas(frame, sourceImage);
+          }
+        });
+
+        state.setState({ frames: [...frames] });
+        closeUnifyModal();
+        this.renderMainCanvas();
+        this.renderFrameList();
+        this.renderPlayerViewport();
+        this.setStatus(`已将全部 ${frames.length} 个选框统一为 ${targetW} × ${targetH} px 规格！`);
+      });
+    }
+  }
+
+  /**
+   * 绑定均等网格行列切片模态框事件
+   */
+  bindGridSliceModal() {
+    if (this.btnGridSlice) {
+      this.btnGridSlice.addEventListener('click', () => {
+        const sourceImage = state.get('sourceImage');
+        if (!sourceImage) {
+          this.setStatus('请先导入精灵大图');
+          return;
+        }
+        if (this.modalGridSlice) this.modalGridSlice.classList.add('active');
+      });
+    }
+
+    const closeGridModal = () => {
+      if (this.modalGridSlice) this.modalGridSlice.classList.remove('active');
+    };
+
+    if (this.btnCloseGridModal) this.btnCloseGridModal.addEventListener('click', closeGridModal);
+    if (this.btnCancelGrid) this.btnCancelGrid.addEventListener('click', closeGridModal);
+
+    if (this.btnConfirmGrid) {
+      this.btnConfirmGrid.addEventListener('click', () => {
+        const sourceImage = state.get('sourceImage');
+        if (!sourceImage) return;
+
+        const rows = Math.max(1, parseInt(this.gridRowsInput?.value, 10) || 1);
+        const cols = Math.max(1, parseInt(this.gridColsInput?.value, 10) || 1);
+
+        const imgW = sourceImage.width;
+        const imgH = sourceImage.height;
+        const cellW = Math.floor(imgW / cols);
+        const cellH = Math.floor(imgH / rows);
+
+        const newFrames = [];
+        let count = 1;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            newFrames.push({
+              id: 'frame_' + Date.now() + '_' + count,
+              name: `帧 ${count}`,
+              rect: { x: c * cellW, y: r * cellH, w: cellW, h: cellH },
+              offset: { x: 0, y: 0 },
+              pivot: { x: 0.5, y: 1.0 }, // 默认脚底中心对齐
+              maskCanvas: null
+            });
+            count++;
+          }
+        }
+
+        state.setState({ frames: newFrames, selectedFrameId: newFrames[0]?.id || null });
+        closeGridModal();
+        this.renderMainCanvas();
+        this.renderFrameList();
+        this.renderPlayerViewport();
+        this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧 (${cols}列 × ${rows}行，单帧 ${cellW} × ${cellH} px)`);
+      });
+    }
+  }
+
+  /**
    * 状态订阅与动态刷新
    */
   bindStateSubscriptions() {
@@ -7841,8 +8338,20 @@ class SpriteAnimatorApp {
       badge.className = 'frame-badge';
       badge.textContent = `${idx + 1}`;
 
+      // 缩略图右上角单帧删除小叉叉按钮
+      const delBtn = document.createElement('button');
+      delBtn.className = 'frame-item-del-btn';
+      delBtn.title = '删除此单帧';
+      delBtn.textContent = '×';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.removeFrame(frame.id);
+        this.setStatus(`已删除动作帧: ${frame.name || `帧 ${idx + 1}`}`);
+      });
+
       thumbBox.appendChild(thumbCanvas);
       thumbBox.appendChild(badge);
+      thumbBox.appendChild(delBtn);
 
       const title = document.createElement('div');
       title.className = 'frame-title';
@@ -7883,6 +8392,15 @@ class SpriteAnimatorApp {
       } else {
         this.currentFrameInfoBadge.textContent = '选框: 无';
       }
+    }
+
+    // 联动同步当前帧的宽/高尺寸输入框
+    if (frame && this.frameWInput && this.frameHInput) {
+      this.frameWInput.value = Math.round(frame.rect.w);
+      this.frameHInput.value = Math.round(frame.rect.h);
+    } else if (!frame && this.frameWInput && this.frameHInput) {
+      this.frameWInput.value = '';
+      this.frameHInput.value = '';
     }
 
     // 联动同步右侧侧边栏九宫格按钮高亮与偏移量输入框
@@ -7954,7 +8472,10 @@ class SpriteAnimatorApp {
       frames,
       currentIndex,
       sourceImage,
-      playerState
+      {
+        ...playerState,
+        zoom: playerState.viewportScaleMode || 'auto'
+      }
     );
   }
 

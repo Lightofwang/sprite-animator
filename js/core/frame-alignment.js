@@ -315,6 +315,59 @@ export class FrameAlignment {
    * @param {HTMLImageElement|null} sourceImage 原始大图
    * @param {Object} displayConfig 显示配置 { showGround, onionSkin, showPivot, onionSkinOpacity }
    */
+  /**
+   * 计算视口舞台的最佳缩放比 (自适应完整展示整个人物与武器)
+   * @param {number} canvasWidth 
+   * @param {number} canvasHeight 
+   * @param {Array<Object>} allFrames 
+   * @param {Object|null} currentFrame 
+   * @param {number|string} userZoom 'auto' 或 具体倍率数字
+   * @returns {number}
+   */
+  calculateStageScale(canvasWidth, canvasHeight, allFrames = [], currentFrame = null, userZoom = 'auto') {
+    if (typeof userZoom === 'number' && userZoom > 0) {
+      return userZoom;
+    }
+    if (typeof userZoom === 'string' && userZoom !== 'auto') {
+      const parsed = parseFloat(userZoom);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+
+    // 自适应 Auto Fit 逻辑
+    let maxW = currentFrame?.rect?.w || 0;
+    let maxH = currentFrame?.rect?.h || 0;
+
+    if (Array.isArray(allFrames)) {
+      allFrames.forEach(f => {
+        if (f && f.rect) {
+          if (f.rect.w > maxW) maxW = f.rect.w;
+          if (f.rect.h > maxH) maxH = f.rect.h;
+        }
+      });
+    }
+
+    if (maxW <= 0 || maxH <= 0) return 1.0;
+
+    // 可用区域：宽度预留 15% 边距，高度从脚底 82% 向上预留 6% 边距即 76%
+    const availW = canvasWidth * 0.85;
+    const availH = canvasHeight * 0.76;
+
+    const scaleW = availW / maxW;
+    const scaleH = availH / maxH;
+    const fitScale = Math.min(scaleW, scaleH);
+
+    return Math.min(1.0, fitScale);
+  }
+
+  /**
+   * 渲染对齐工作台/播放器视口 (包含洋葱皮、自适应缩放、地面参考线与锚点准星)
+   * @param {HTMLCanvasElement} canvas 目标视口 Canvas
+   * @param {Object|null} currentFrame 当前帧对象
+   * @param {Array<Object>} allFrames 全部帧列表
+   * @param {number} currentIndex 当前帧索引
+   * @param {HTMLImageElement|null} sourceImage 原始大图
+   * @param {Object} displayConfig 显示配置 { showGround, onionSkin, showPivot, onionSkinOpacity, zoom }
+   */
   renderAlignmentStage(canvas, currentFrame, allFrames = [], currentIndex = 0, sourceImage = null, displayConfig = {}) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -329,6 +382,12 @@ export class FrameAlignment {
     // 计算地面与锚点基准坐标：水平居中，脚底基准线位于画布高 82% 处
     const targetBaseX = Math.round(width / 2);
     const targetBaseY = Math.round(height * 0.82);
+
+    // 计算视口缩放比
+    const scale = this.calculateStageScale(width, height, allFrames, currentFrame, displayConfig.zoom);
+    this.lastRenderScale = scale;
+    this.lastTargetBaseX = targetBaseX;
+    this.lastTargetBaseY = targetBaseY;
 
     const showGround = displayConfig.showGround !== false;
     const showPivot = displayConfig.showPivot !== false;
@@ -355,57 +414,63 @@ export class FrameAlignment {
       ctx.restore();
     }
 
-    // 2. 绘制洋葱皮残影 (如果开启)
+    // 2 & 3. 绘制洋葱皮残影与当前主体帧 (应用缩放变换)
+    ctx.save();
+    ctx.translate(targetBaseX, targetBaseY);
+    ctx.scale(scale, scale);
+
+    // 洋葱皮残影 (在局部坐标系以 (0, 0) 为脚底基准对齐)
     if (showOnion && allFrames.length > 1) {
       const onionList = this.getOnionSkinFrames(allFrames, currentIndex, 1, 1);
       const userAlpha = typeof displayConfig.onionSkinOpacity === 'number' ? displayConfig.onionSkinOpacity : 0.30;
 
       onionList.forEach(item => {
-        this.renderFrameToContext(ctx, item.frame, sourceImage, targetBaseX, targetBaseY, {
+        this.renderFrameToContext(ctx, item.frame, sourceImage, 0, 0, {
           alpha: userAlpha,
           tint: item.color
         });
       });
     }
 
-    // 3. 绘制当前主体帧 (不透明、真实色彩)
+    // 当前主体帧 (在局部坐标系以 (0, 0) 为脚底基准对齐)
     if (currentFrame) {
-      this.renderFrameToContext(ctx, currentFrame, sourceImage, targetBaseX, targetBaseY, {
+      this.renderFrameToContext(ctx, currentFrame, sourceImage, 0, 0, {
         alpha: 1.0,
         tint: null
       });
+    }
+    ctx.restore();
 
-      // 4. 绘制当前帧的锚点十字准星
-      if (showPivot) {
-        ctx.save();
-        const ox = currentFrame.offset ? (currentFrame.offset.x || 0) : 0;
-        const oy = currentFrame.offset ? (currentFrame.offset.y || 0) : 0;
-        const pivotScreenX = targetBaseX + ox;
-        const pivotScreenY = targetBaseY + oy;
+    // 4. 绘制当前帧的锚点十字准星 (在屏幕绝对像素空间，保持准星清晰度)
+    if (currentFrame && showPivot) {
+      ctx.save();
+      const ox = currentFrame.offset ? (currentFrame.offset.x || 0) : 0;
+      const oy = currentFrame.offset ? (currentFrame.offset.y || 0) : 0;
+      const pivotScreenX = targetBaseX + ox * scale;
+      const pivotScreenY = targetBaseY + oy * scale;
 
-        // 准星红色外圆
-        ctx.strokeStyle = '#ff006e';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(pivotScreenX, pivotScreenY, 6, 0, Math.PI * 2);
-        ctx.stroke();
+      // 准星红色外圆
+      ctx.strokeStyle = '#ff006e';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(pivotScreenX, pivotScreenY, 6, 0, Math.PI * 2);
+      ctx.stroke();
 
-        // 准星十字交叉线
-        ctx.beginPath();
-        ctx.moveTo(pivotScreenX - 10, pivotScreenY);
-        ctx.lineTo(pivotScreenX + 10, pivotScreenY);
-        ctx.moveTo(pivotScreenX, pivotScreenY - 10);
-        ctx.lineTo(pivotScreenX, pivotScreenY + 10);
-        ctx.stroke();
+      // 准星十字交叉线
+      ctx.beginPath();
+      ctx.moveTo(pivotScreenX - 10, pivotScreenY);
+      ctx.lineTo(pivotScreenX + 10, pivotScreenY);
+      ctx.moveTo(pivotScreenX, pivotScreenY - 10);
+      ctx.lineTo(pivotScreenX, pivotScreenY + 10);
+      ctx.stroke();
 
-        // 准星中心白点
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(pivotScreenX, pivotScreenY, 2, 0, Math.PI * 2);
-        ctx.fill();
+      // 准星中心白点
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(pivotScreenX, pivotScreenY, 2, 0, Math.PI * 2);
+      ctx.fill();
 
-        ctx.restore();
-      }
+      ctx.restore();
     }
   }
 }

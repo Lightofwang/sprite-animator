@@ -176,6 +176,9 @@
               <button class="btn btn-icon btn-secondary" id="btn-add-frame" title="添加新选框">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               </button>
+              <button class="btn btn-icon btn-secondary" id="btn-delete-frame" title="删除当前选中的单帧 (Delete)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
               <button class="btn btn-icon btn-danger" id="btn-clear-frames" title="清空全部选框">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
               </button>
@@ -185,6 +188,31 @@
           <!-- 帧缩略图序列网格 -->
           <div class="frame-list-wrapper" id="frame-list">
             <!-- 动态注入帧缩略图卡片 -->
+          </div>
+
+          <!-- 选框尺寸与统一规格卡片 -->
+          <div class="alignment-controls-card box-size-controls-card">
+            <div class="control-row">
+              <span class="label-title">选框尺寸 (W × H)</span>
+              <div class="offset-inputs">
+                <div class="coord-field">
+                  <span>宽:</span>
+                  <input type="number" id="frame-w" min="4" placeholder="宽" title="当前帧选框宽度 (Enter应用)">
+                </div>
+                <div class="coord-field">
+                  <span>高:</span>
+                  <input type="number" id="frame-h" min="4" placeholder="高" title="当前帧选框高度 (Enter应用)">
+                </div>
+              </div>
+            </div>
+            <div class="control-row" style="margin-top: 6px; display: flex; gap: 6px;">
+              <button class="btn btn-secondary btn-sm" id="btn-unify-size" style="flex: 1;" title="将全部选框尺寸统一为相同大小（以脚底中心对齐）">
+                📐 统一全部尺寸
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-grid-slice" style="flex: 1;" title="按行与列生成均等网格选框">
+                ⊞ 网格等分切片
+              </button>
+            </div>
           </div>
 
           <!-- 锚点与对齐控制卡片 -->
@@ -237,10 +265,17 @@
           <div class="section-header">
             <span>实时动画播放器</span>
             <div class="actions">
-              <select class="select-input" id="loop-mode-select" title="播放循环模式">
-                <option value="loop">循环播放 (Loop)</option>
-                <option value="once">单次播放 (Once)</option>
-                <option value="pingpong">往返乒乓 (Ping-pong)</option>
+              <select class="select-input" id="player-zoom-select" title="播放器画面显示比例" style="max-width: 100px;">
+                <option value="auto">自适应完整</option>
+                <option value="1.0">100% 原始</option>
+                <option value="0.75">75%</option>
+                <option value="0.5">50%</option>
+                <option value="0.35">35%</option>
+              </select>
+              <select class="select-input" id="loop-mode-select" title="播放循环模式" style="max-width: 110px;">
+                <option value="loop">循环播放</option>
+                <option value="once">单次播放</option>
+                <option value="pingpong">往返乒乓</option>
               </select>
             </div>
           </div>
@@ -335,10 +370,92 @@
           <div id="export-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-blue), var(--accent-green)); transition: width 0.15s ease;"></div>
         </div>
       </div>
+  <!-- 统一选框尺寸模态框 -->
+  <div class="modal-overlay" id="modal-unify-size">
+    <div class="modal-box" style="width: 420px;">
+      <div class="modal-header">
+        <span>一键统一全部选框尺寸 (Uniform Frame Sizes)</span>
+        <button class="btn btn-icon btn-secondary" id="btn-close-unify-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 12px; color: var(--text-sub); line-height: 1.5;">
+          将所有动作帧调整为一模一样的大小。调整时将自动锚定脚底中心，确保角色地面位置丝毫不偏：
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="unify-source" id="radio-unify-selected" value="selected" checked>
+            <span>以当前选中帧尺寸为基准 (<strong id="label-selected-size">0 × 0</strong>)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="unify-source" id="radio-unify-max" value="max">
+            <span>以全部选框的最大包围尺寸 (<strong id="label-max-size">0 × 0</strong>)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="radio" name="unify-source" id="radio-unify-custom" value="custom">
+            <span>自定义指定尺寸</span>
+          </label>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center; padding-left: 24px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>宽度:</span>
+            <input type="number" id="unify-custom-w" min="10" max="4096" value="512" style="width: 70px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <span>px</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>高度:</span>
+            <input type="number" id="unify-custom-h" min="10" max="4096" value="384" style="width: 70px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <span>px</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+          <label style="width: 80px; font-weight: 500;">对齐基准:</label>
+          <select id="unify-align-anchor" class="select-input" style="flex: 1;">
+            <option value="bottom-center" selected>底部中心 (脚底地面不动，四周向上延展)</option>
+            <option value="center">正中心 (原中心不动，向四周对称延展)</option>
+            <option value="top-left">左上角 (左上角不动)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-unify">取消</button>
+        <button class="btn btn-primary" id="btn-confirm-unify">确定统一尺寸</button>
+      </div>
     </div>
   </div>
 
-  <!-- 引入第三方依赖库与核心主入口模块 -->
+  <!-- 均等网格切片模态框 -->
+  <div class="modal-overlay" id="modal-grid-slice">
+    <div class="modal-box" style="width: 400px;">
+      <div class="modal-header">
+        <span>均等网格自动切片 (Grid Slicer)</span>
+        <button class="btn btn-icon btn-secondary" id="btn-close-grid-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 12px; color: var(--text-sub); line-height: 1.5;">
+          按照指定的行数和列数，在原图上生成一整套完全等大的网格选框：
+        </div>
+        <div style="display: flex; gap: 16px; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+            <label style="width: 40px;">行数:</label>
+            <input type="number" id="grid-rows-input" min="1" max="50" value="3" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <span style="color: var(--text-sub); font-size: 12px;">行</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+            <label style="width: 40px;">列数:</label>
+            <input type="number" id="grid-cols-input" min="1" max="50" value="4" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <span style="color: var(--text-sub); font-size: 12px;">列</span>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: var(--accent-yellow); background: rgba(255, 209, 102, 0.1); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 209, 102, 0.2);">
+          💡 提示：生成网格将覆盖当前全部选框。每个单元格尺寸将自动均等计算。
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-grid">取消</button>
+        <button class="btn btn-primary" id="btn-confirm-grid">生成网格切片</button>
+      </div>
+    </div>
+  </div>
   <script src="js/vendor/jszip.min.js"></script>
   <script src="js/vendor/gifshot.min.js"></script>
   <script type="module" src="js/app.js"></script>

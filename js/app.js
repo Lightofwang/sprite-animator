@@ -78,7 +78,34 @@ class SpriteAnimatorApp {
     this.frameCountBadge = document.getElementById('frame-count-badge');
     this.frameList = document.getElementById('frame-list');
     this.btnAddFrame = document.getElementById('btn-add-frame');
+    this.btnDeleteFrame = document.getElementById('btn-delete-frame');
     this.btnClearFrames = document.getElementById('btn-clear-frames');
+    this.frameWInput = document.getElementById('frame-w');
+    this.frameHInput = document.getElementById('frame-h');
+    this.btnUnifySize = document.getElementById('btn-unify-size');
+    this.btnGridSlice = document.getElementById('btn-grid-slice');
+    this.playerZoomSelect = document.getElementById('player-zoom-select');
+
+    // 统一尺寸与网格切片模态框元素
+    this.modalUnifySize = document.getElementById('modal-unify-size');
+    this.btnCloseUnifyModal = document.getElementById('btn-close-unify-modal');
+    this.btnCancelUnify = document.getElementById('btn-cancel-unify');
+    this.btnConfirmUnify = document.getElementById('btn-confirm-unify');
+    this.radioUnifySelected = document.getElementById('radio-unify-selected');
+    this.radioUnifyMax = document.getElementById('radio-unify-max');
+    this.radioUnifyCustom = document.getElementById('radio-unify-custom');
+    this.labelSelectedSize = document.getElementById('label-selected-size');
+    this.labelMaxSize = document.getElementById('label-max-size');
+    this.unifyCustomW = document.getElementById('unify-custom-w');
+    this.unifyCustomH = document.getElementById('unify-custom-h');
+    this.unifyAlignAnchor = document.getElementById('unify-align-anchor');
+
+    this.modalGridSlice = document.getElementById('modal-grid-slice');
+    this.btnCloseGridModal = document.getElementById('btn-close-grid-modal');
+    this.btnCancelGrid = document.getElementById('btn-cancel-grid');
+    this.btnConfirmGrid = document.getElementById('btn-confirm-grid');
+    this.gridRowsInput = document.getElementById('grid-rows-input');
+    this.gridColsInput = document.getElementById('grid-cols-input');
 
     // 锚点与对齐控制
     this.pivotGrid = document.getElementById('pivot-grid');
@@ -305,11 +332,89 @@ class SpriteAnimatorApp {
       });
     }
 
+    // 删除当前选中单帧
+    if (this.btnDeleteFrame) {
+      this.btnDeleteFrame.addEventListener('click', () => {
+        const selectedId = state.get('selectedFrameId');
+        if (!selectedId) {
+          this.setStatus('请先在帧列表中选择要删除的单帧');
+          return;
+        }
+        const frame = state.getSelectedFrame();
+        state.removeFrame(selectedId);
+        this.setStatus(`已删除单帧: ${frame?.name || selectedId}`);
+      });
+    }
+
     if (this.btnClearFrames) {
       this.btnClearFrames.addEventListener('click', () => {
         if (state.get('frames').length === 0) return;
         state.setState({ frames: [], selectedFrameId: null });
         this.setStatus('已清空所有选框');
+      });
+    }
+
+    // 选框尺寸 (W × H) 实时编辑
+    const handleFrameDimensionChange = () => {
+      const selectedFrame = state.getSelectedFrame();
+      if (!selectedFrame) return;
+
+      let newW = parseInt(this.frameWInput?.value, 10);
+      let newH = parseInt(this.frameHInput?.value, 10);
+      if (isNaN(newW) || newW < 1) newW = selectedFrame.rect.w;
+      if (isNaN(newH) || newH < 1) newH = selectedFrame.rect.h;
+
+      if (newW === selectedFrame.rect.w && newH === selectedFrame.rect.h) return;
+
+      // 默认以脚底中心对齐扩展/收缩
+      const oldRect = selectedFrame.rect;
+      const cx = oldRect.x + oldRect.w / 2;
+      const by = oldRect.y + oldRect.h;
+      const newX = Math.round(cx - newW / 2);
+      const newY = Math.round(by - newH);
+
+      state.updateFrame(selectedFrame.id, {
+        rect: { x: newX, y: newY, w: newW, h: newH }
+      });
+
+      // 如果有隔离画布，需要以新尺寸重置
+      if (selectedFrame.maskCanvas) {
+        const sourceImage = state.get('sourceImage');
+        if (sourceImage) {
+          overlapIsolator.initFrameCanvas(selectedFrame, sourceImage);
+        }
+      }
+
+      this.renderMainCanvas();
+      this.updateSingleThumbnail(selectedFrame.id);
+      this.renderPlayerViewport();
+      this.setStatus(`当前帧尺寸已更新为: ${newW} × ${newH} px`);
+    };
+
+    if (this.frameWInput) {
+      this.frameWInput.addEventListener('change', handleFrameDimensionChange);
+      this.frameWInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleFrameDimensionChange();
+      });
+    }
+    if (this.frameHInput) {
+      this.frameHInput.addEventListener('change', handleFrameDimensionChange);
+      this.frameHInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleFrameDimensionChange();
+      });
+    }
+
+    // 统一尺寸与网格切片弹窗逻辑绑定
+    this.bindUnifySizeModal();
+    this.bindGridSliceModal();
+
+    // 播放器视口缩放模式下拉选择
+    if (this.playerZoomSelect) {
+      this.playerZoomSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        state.setPlayerState({ viewportScaleMode: val });
+        this.renderPlayerViewport();
+        this.setStatus(`视口缩放模式已设为: ${e.target.options[e.target.selectedIndex]?.text || val}`);
       });
     }
 
@@ -688,9 +793,6 @@ class SpriteAnimatorApp {
       if (this.isNearCrosshair(mousePos, crosshairPos, 10)) {
         this.isDraggingPivot = true;
         this.draggedFrame = selectedFrame;
-        const targetBaseX = Math.round(this.playerCanvas.width / 2);
-        const targetBaseY = Math.round(this.playerCanvas.height * 0.82);
-        this.pivotDragOrigin = frameAlignment.calculateWorldRenderPos(selectedFrame, targetBaseX, targetBaseY);
         this.playerCanvas.style.cursor = 'crosshair';
         e.preventDefault();
       }
@@ -700,10 +802,15 @@ class SpriteAnimatorApp {
     this.playerCanvas.addEventListener('mousemove', (e) => {
       const mousePos = this.getPlayerCanvasMousePos(e);
 
-      if (this.isDraggingPivot && this.draggedFrame && this.pivotDragOrigin) {
+      if (this.isDraggingPivot && this.draggedFrame) {
         const selectedFrame = this.draggedFrame;
-        const pixelX = mousePos.x - this.pivotDragOrigin.dx;
-        const pixelY = mousePos.y - this.pivotDragOrigin.dy;
+        const targetBaseX = Math.round(this.playerCanvas.width / 2);
+        const targetBaseY = Math.round(this.playerCanvas.height * 0.82);
+        const scale = frameAlignment.lastRenderScale || 1.0;
+        const localOrigin = frameAlignment.calculateWorldRenderPos(selectedFrame, 0, 0);
+
+        const pixelX = (mousePos.x - targetBaseX) / scale - localOrigin.dx;
+        const pixelY = (mousePos.y - targetBaseY) / scale - localOrigin.dy;
 
         frameAlignment.setCustomPivot(selectedFrame, pixelX, pixelY);
         state.updateFrame(selectedFrame.id, { pivot: { ...selectedFrame.pivot } });
@@ -790,7 +897,7 @@ class SpriteAnimatorApp {
   }
 
   /**
-   * 获取当前帧在 playerCanvas 视口中的十字准星屏幕像素坐标
+   * 获取当前帧在 playerCanvas 视口中的十字准星屏幕像素坐标 (自适应缩放)
    * @param {Object} frame 
    * @returns {{x: number, y: number}}
    */
@@ -798,11 +905,12 @@ class SpriteAnimatorApp {
     if (!this.playerCanvas) return { x: 0, y: 0 };
     const targetBaseX = Math.round(this.playerCanvas.width / 2);
     const targetBaseY = Math.round(this.playerCanvas.height * 0.82);
+    const scale = frameAlignment.lastRenderScale || 1.0;
     const ox = frame?.offset ? (frame.offset.x || 0) : 0;
     const oy = frame?.offset ? (frame.offset.y || 0) : 0;
     return {
-      x: targetBaseX + ox,
-      y: targetBaseY + oy
+      x: targetBaseX + ox * scale,
+      y: targetBaseY + oy * scale
     };
   }
 
@@ -1241,6 +1349,179 @@ class SpriteAnimatorApp {
   }
 
   /**
+   * 绑定统一选框尺寸模态框事件
+   */
+  bindUnifySizeModal() {
+    if (this.btnUnifySize) {
+      this.btnUnifySize.addEventListener('click', () => {
+        const frames = state.get('frames') || [];
+        if (frames.length === 0) {
+          this.setStatus('暂无动作帧，请先导入图片并添加选框');
+          return;
+        }
+
+        const selectedFrame = state.getSelectedFrame();
+        let maxW = 0;
+        let maxH = 0;
+        frames.forEach(f => {
+          if (f.rect.w > maxW) maxW = f.rect.w;
+          if (f.rect.h > maxH) maxH = f.rect.h;
+        });
+
+        if (this.labelSelectedSize) {
+          this.labelSelectedSize.textContent = selectedFrame
+            ? `${selectedFrame.rect.w} × ${selectedFrame.rect.h} px`
+            : '未选择 (建议先在列表中点击一帧)';
+        }
+        if (this.labelMaxSize) {
+          this.labelMaxSize.textContent = `${maxW} × ${maxH} px`;
+        }
+        if (this.unifyCustomW && this.unifyCustomH) {
+          this.unifyCustomW.value = selectedFrame ? selectedFrame.rect.w : maxW;
+          this.unifyCustomH.value = selectedFrame ? selectedFrame.rect.h : maxH;
+        }
+
+        if (this.modalUnifySize) this.modalUnifySize.classList.add('active');
+      });
+    }
+
+    const closeUnifyModal = () => {
+      if (this.modalUnifySize) this.modalUnifySize.classList.remove('active');
+    };
+
+    if (this.btnCloseUnifyModal) this.btnCloseUnifyModal.addEventListener('click', closeUnifyModal);
+    if (this.btnCancelUnify) this.btnCancelUnify.addEventListener('click', closeUnifyModal);
+
+    if (this.btnConfirmUnify) {
+      this.btnConfirmUnify.addEventListener('click', () => {
+        const frames = state.get('frames') || [];
+        if (frames.length === 0) return;
+
+        const selectedFrame = state.getSelectedFrame();
+        let maxW = 0;
+        let maxH = 0;
+        frames.forEach(f => {
+          if (f.rect.w > maxW) maxW = f.rect.w;
+          if (f.rect.h > maxH) maxH = f.rect.h;
+        });
+
+        let targetW = 64;
+        let targetH = 64;
+
+        if (this.radioUnifySelected && this.radioUnifySelected.checked) {
+          if (selectedFrame) {
+            targetW = selectedFrame.rect.w;
+            targetH = selectedFrame.rect.h;
+          } else {
+            targetW = maxW;
+            targetH = maxH;
+          }
+        } else if (this.radioUnifyMax && this.radioUnifyMax.checked) {
+          targetW = maxW;
+          targetH = maxH;
+        } else if (this.radioUnifyCustom && this.radioUnifyCustom.checked) {
+          targetW = Math.max(1, parseInt(this.unifyCustomW?.value, 10) || 64);
+          targetH = Math.max(1, parseInt(this.unifyCustomH?.value, 10) || 64);
+        }
+
+        const anchor = this.unifyAlignAnchor ? this.unifyAlignAnchor.value : 'bottom-center';
+        const sourceImage = state.get('sourceImage');
+
+        frames.forEach(frame => {
+          const oldRect = frame.rect;
+          let newX = oldRect.x;
+          let newY = oldRect.y;
+
+          if (anchor === 'bottom-center') {
+            const cx = oldRect.x + oldRect.w / 2;
+            const by = oldRect.y + oldRect.h;
+            newX = Math.round(cx - targetW / 2);
+            newY = Math.round(by - targetH);
+          } else if (anchor === 'center') {
+            const cx = oldRect.x + oldRect.w / 2;
+            const cy = oldRect.y + oldRect.h / 2;
+            newX = Math.round(cx - targetW / 2);
+            newY = Math.round(cy - targetH / 2);
+          } // top-left 保持 newX, newY 不变
+
+          frame.rect = { x: newX, y: newY, w: targetW, h: targetH };
+          if (frame.maskCanvas && sourceImage) {
+            overlapIsolator.initFrameCanvas(frame, sourceImage);
+          }
+        });
+
+        state.setState({ frames: [...frames] });
+        closeUnifyModal();
+        this.renderMainCanvas();
+        this.renderFrameList();
+        this.renderPlayerViewport();
+        this.setStatus(`已将全部 ${frames.length} 个选框统一为 ${targetW} × ${targetH} px 规格！`);
+      });
+    }
+  }
+
+  /**
+   * 绑定均等网格行列切片模态框事件
+   */
+  bindGridSliceModal() {
+    if (this.btnGridSlice) {
+      this.btnGridSlice.addEventListener('click', () => {
+        const sourceImage = state.get('sourceImage');
+        if (!sourceImage) {
+          this.setStatus('请先导入精灵大图');
+          return;
+        }
+        if (this.modalGridSlice) this.modalGridSlice.classList.add('active');
+      });
+    }
+
+    const closeGridModal = () => {
+      if (this.modalGridSlice) this.modalGridSlice.classList.remove('active');
+    };
+
+    if (this.btnCloseGridModal) this.btnCloseGridModal.addEventListener('click', closeGridModal);
+    if (this.btnCancelGrid) this.btnCancelGrid.addEventListener('click', closeGridModal);
+
+    if (this.btnConfirmGrid) {
+      this.btnConfirmGrid.addEventListener('click', () => {
+        const sourceImage = state.get('sourceImage');
+        if (!sourceImage) return;
+
+        const rows = Math.max(1, parseInt(this.gridRowsInput?.value, 10) || 1);
+        const cols = Math.max(1, parseInt(this.gridColsInput?.value, 10) || 1);
+
+        const imgW = sourceImage.width;
+        const imgH = sourceImage.height;
+        const cellW = Math.floor(imgW / cols);
+        const cellH = Math.floor(imgH / rows);
+
+        const newFrames = [];
+        let count = 1;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            newFrames.push({
+              id: 'frame_' + Date.now() + '_' + count,
+              name: `帧 ${count}`,
+              rect: { x: c * cellW, y: r * cellH, w: cellW, h: cellH },
+              offset: { x: 0, y: 0 },
+              pivot: { x: 0.5, y: 1.0 }, // 默认脚底中心对齐
+              maskCanvas: null
+            });
+            count++;
+          }
+        }
+
+        state.setState({ frames: newFrames, selectedFrameId: newFrames[0]?.id || null });
+        closeGridModal();
+        this.renderMainCanvas();
+        this.renderFrameList();
+        this.renderPlayerViewport();
+        this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧 (${cols}列 × ${rows}行，单帧 ${cellW} × ${cellH} px)`);
+      });
+    }
+  }
+
+  /**
    * 状态订阅与动态刷新
    */
   bindStateSubscriptions() {
@@ -1396,8 +1677,20 @@ class SpriteAnimatorApp {
       badge.className = 'frame-badge';
       badge.textContent = `${idx + 1}`;
 
+      // 缩略图右上角单帧删除小叉叉按钮
+      const delBtn = document.createElement('button');
+      delBtn.className = 'frame-item-del-btn';
+      delBtn.title = '删除此单帧';
+      delBtn.textContent = '×';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.removeFrame(frame.id);
+        this.setStatus(`已删除动作帧: ${frame.name || `帧 ${idx + 1}`}`);
+      });
+
       thumbBox.appendChild(thumbCanvas);
       thumbBox.appendChild(badge);
+      thumbBox.appendChild(delBtn);
 
       const title = document.createElement('div');
       title.className = 'frame-title';
@@ -1438,6 +1731,15 @@ class SpriteAnimatorApp {
       } else {
         this.currentFrameInfoBadge.textContent = '选框: 无';
       }
+    }
+
+    // 联动同步当前帧的宽/高尺寸输入框
+    if (frame && this.frameWInput && this.frameHInput) {
+      this.frameWInput.value = Math.round(frame.rect.w);
+      this.frameHInput.value = Math.round(frame.rect.h);
+    } else if (!frame && this.frameWInput && this.frameHInput) {
+      this.frameWInput.value = '';
+      this.frameHInput.value = '';
     }
 
     // 联动同步右侧侧边栏九宫格按钮高亮与偏移量输入框
@@ -1509,7 +1811,10 @@ class SpriteAnimatorApp {
       frames,
       currentIndex,
       sourceImage,
-      playerState
+      {
+        ...playerState,
+        zoom: playerState.viewportScaleMode || 'auto'
+      }
     );
   }
 
