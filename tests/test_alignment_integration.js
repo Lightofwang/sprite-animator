@@ -224,7 +224,8 @@ console.log('\n▶ [集成测试 5] 帧视口准星拖拽交互与像素反推�
   app.isDraggingPivot = false;
   app.draggedFrame = null;
   app.pivotDragOrigin = null;
-  assert(app.isDraggingPivot === false, '鼠标松开成功结束拖拽状态');
+  // 验证全局状态中洋葱皮初始透明度为 0.30 (30%)
+  assert(state.get('playerState').onionSkinOpacity === 0.30, '全局初始状态 playerState.onionSkinOpacity 严格为 0.30 (30%)');
 }
 
 console.log('\n======================================================');

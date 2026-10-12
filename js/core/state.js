@@ -114,7 +114,7 @@ class StateStore {
         currentFrameIndex: 0,
         loopMode: 'loop', // 'loop' | 'once' | 'pingpong'
         onionSkin: false,
-        onionSkinOpacity: 0.35,
+        onionSkinOpacity: 0.30,
         showGround: true,
         showPivot: true,
         zoom: 1.0
