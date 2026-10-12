@@ -5,6 +5,7 @@
 
 import { state } from '../js/core/state.js';
 import { frameAlignment } from '../js/core/frame-alignment.js';
+import { SpriteAnimatorApp } from '../js/app.js';
 
 let passed = 0;
 let failed = 0;
@@ -15,6 +16,17 @@ function assert(condition, message) {
     passed++;
   } else {
     console.error(`  \x1b[31m✘ FAIL\x1b[0m: ${message}`);
+    failed++;
+  }
+}
+
+function assertClose(actual, expected, message, tolerance = 0.0001) {
+  const diff = Math.abs(actual - expected);
+  if (diff <= tolerance) {
+    console.log(`  \x1b[32m✔ PASS\x1b[0m: ${message}`);
+    passed++;
+  } else {
+    console.error(`  \x1b[31m✘ FAIL\x1b[0m: ${message} (期望: ${expected}, 实际: ${actual}, 误差: ${diff})`);
     failed++;
   }
 }
@@ -119,6 +131,100 @@ console.log('\n▶ [集成测试 4] 洋葱皮残影与地面参考线状态响�
 
   state.setPlayerState({ showGround: false });
   assert(state.get('playerState').showGround === false, '地面参考线成功关闭');
+}
+
+// 测试 5: 帧视口 (playerCanvas) 准星拖拽交互、像素反推与九宫格联动
+console.log('\n▶ [集成测试 5] 帧视口准星拖拽交互与像素反推测试:');
+{
+  const app = Object.create(SpriteAnimatorApp.prototype);
+  app.playerCanvas = {
+    width: 256,
+    height: 256,
+    style: { cursor: '' },
+    getBoundingClientRect: () => ({ left: 10, top: 20, width: 256, height: 256 })
+  };
+  app.isDraggingPivot = false;
+  app.pivotDragOrigin = null;
+  app.draggedFrame = null;
+  let viewportRendered = 0;
+  let mainCanvasRendered = 0;
+  let statusMessage = '';
+  app.renderPlayerViewport = () => { viewportRendered++; };
+  app.renderMainCanvas = () => { mainCanvasRendered++; };
+  app.setStatus = (msg) => { statusMessage = msg; };
+
+  const currentDots = {};
+  app.pivotDots = ['top-left', 'center', 'bottom-center'].map(key => ({
+    dataset: { pivot: key },
+    classList: {
+      toggle: (cls, active) => {
+        if (cls === 'active') currentDots[key] = active;
+      }
+    }
+  }));
+
+  state.selectFrame('frame_1');
+  const frame1 = state.getSelectedFrame();
+  // frame_1: rect: { x: 0, y: 0, w: 100, h: 100 }, pivot: { x: 0.5, y: 0.5 }, offset: { x: 1, y: 10 }
+
+  // 1. 验证准星屏幕坐标推导
+  // targetBaseX = 128, targetBaseY = Math.round(256 * 0.82) = 210
+  // crosshair: x = 128 + 1 = 129, y = 210 + 10 = 220
+  const crosshairPos = app.getPlayerCanvasCrosshairPos(frame1);
+  assert(crosshairPos.x === 129 && crosshairPos.y === 220, '准星屏幕坐标正确推导为 (129, 220)');
+
+  // 2. 验证 10px 命中半径检测
+  assert(app.isNearCrosshair({ x: 129, y: 220 }, crosshairPos, 10) === true, '准星中心 (129, 220) 命中检测为 true');
+  assert(app.isNearCrosshair({ x: 135, y: 226 }, crosshairPos, 10) === true, '距离 8.5px 点命中检测为 true');
+  assert(app.isNearCrosshair({ x: 140, y: 220 }, crosshairPos, 10) === false, '距离 11px 点超出 10px 命中半径返回 false');
+
+  // 3. 验证鼠标在 canvas 实际像素坐标转换 (考虑 getBoundingClientRect)
+  const mousePos = app.getPlayerCanvasMousePos({ clientX: 139, clientY: 240 });
+  assert(mousePos.x === 129 && mousePos.y === 220, '考虑 offset 偏移正确反推 canvas 像素坐标 (129, 220)');
+
+  // 4. 模拟准星拖拽交互全流程
+  // 按下时记录渲染基准原点 (dx, dy)
+  const targetBaseX = 128;
+  const targetBaseY = 210;
+  const renderOrigin = frameAlignment.calculateWorldRenderPos(frame1, targetBaseX, targetBaseY);
+  // dx = 128 - 100 * 0.5 + 1 = 79
+  // dy = 210 - 100 * 0.5 + 10 = 170
+  app.isDraggingPivot = true;
+  app.draggedFrame = frame1;
+  app.pivotDragOrigin = renderOrigin;
+  assert(app.pivotDragOrigin.dx === 79 && app.pivotDragOrigin.dy === 170, '按下时锁定渲染基准坐标 (79, 170)');
+
+  // 模拟拖拽准星到左上角 (mouseX = 79, mouseY = 170)
+  const dragMouse1 = { x: 79, y: 170 };
+  const pixelX1 = dragMouse1.x - app.pivotDragOrigin.dx; // 0
+  const pixelY1 = dragMouse1.y - app.pivotDragOrigin.dy; // 0
+  frameAlignment.setCustomPivot(frame1, pixelX1, pixelY1);
+  state.updateFrame(frame1.id, { pivot: { ...frame1.pivot } });
+  app.updatePivotGridUI(frame1);
+  app.renderPlayerViewport();
+  app.renderMainCanvas();
+
+  assert(frame1.pivot.x === 0.0 && frame1.pivot.y === 0.0, '拖拽至左上角反推 pivot 为 (0.0, 0.0)');
+  assert(currentDots['top-left'] === true, '左上角预设按钮自动高亮');
+  assert(viewportRendered > 0 && mainCanvasRendered > 0, '触发视口与主工作区实时重绘');
+
+  // 模拟拖拽准星到自定义非预设位置 (mouseX = 79 + 33, mouseY = 170 + 82)
+  const dragMouse2 = { x: 112, y: 252 };
+  const pixelX2 = dragMouse2.x - app.pivotDragOrigin.dx; // 33
+  const pixelY2 = dragMouse2.y - app.pivotDragOrigin.dy; // 82
+  frameAlignment.setCustomPivot(frame1, pixelX2, pixelY2);
+  state.updateFrame(frame1.id, { pivot: { ...frame1.pivot } });
+  app.updatePivotGridUI(frame1);
+
+  assertClose(frame1.pivot.x, 0.33, '自定义拖拽反推比例 X: 0.33');
+  assertClose(frame1.pivot.y, 0.82, '自定义拖拽反推比例 Y: 0.82');
+  assert(currentDots['top-left'] === false && currentDots['center'] === false && currentDots['bottom-center'] === false, '非预设自定义坐标不高亮任何预设');
+
+  // 模拟鼠标松开结束拖拽
+  app.isDraggingPivot = false;
+  app.draggedFrame = null;
+  app.pivotDragOrigin = null;
+  assert(app.isDraggingPivot === false, '鼠标松开成功结束拖拽状态');
 }
 
 console.log('\n======================================================');

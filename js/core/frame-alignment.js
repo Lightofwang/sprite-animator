@@ -175,8 +175,8 @@ export class FrameAlignment {
 
   /**
    * 获取当前帧的前后相邻洋葱皮残影帧列表及其视觉着色配置
-   * - 前相邻帧着色淡红/橙色 (淡暖色)，透明度 0.35
-   * - 后相邻帧着色淡蓝/青色 (淡冷色)，透明度 0.35
+   * - 前相邻帧着色淡红/橙色 (淡暖色)，透明度 0.30
+   * - 后相邻帧着色淡蓝/青色 (淡冷色)，透明度 0.30
    * - 边界处理：首帧无前帧，末帧无后帧
    * @param {Array<Object>} frames 完整序列帧数组
    * @param {number} currentIndex 当前选中的帧索引
@@ -201,9 +201,9 @@ export class FrameAlignment {
           step,
           offsetIndex: -step,
           // 前帧着色：淡红/橙色半透明
-          tint: 'rgba(255, 68, 68, 0.35)',
+          tint: 'rgba(255, 68, 68, 0.30)',
           color: '#ff4444',
-          alpha: 0.35
+          alpha: 0.30
         });
       }
     }
@@ -219,9 +219,9 @@ export class FrameAlignment {
           step,
           offsetIndex: step,
           // 后帧着色：淡蓝/青色半透明
-          tint: 'rgba(0, 180, 255, 0.35)',
+          tint: 'rgba(0, 180, 255, 0.30)',
           color: '#00b4ff',
-          alpha: 0.35
+          alpha: 0.30
         });
       }
     }
@@ -358,7 +358,7 @@ export class FrameAlignment {
     // 2. 绘制洋葱皮残影 (如果开启)
     if (showOnion && allFrames.length > 1) {
       const onionList = this.getOnionSkinFrames(allFrames, currentIndex, 1, 1);
-      const userAlpha = displayConfig.onionSkinOpacity || 0.35;
+      const userAlpha = typeof displayConfig.onionSkinOpacity === 'number' ? displayConfig.onionSkinOpacity : 0.30;
 
       onionList.forEach(item => {
         this.renderFrameToContext(ctx, item.frame, sourceImage, targetBaseX, targetBaseY, {

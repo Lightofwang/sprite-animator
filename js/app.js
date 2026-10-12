@@ -11,6 +11,11 @@ import { FrameAlignment, frameAlignment } from './core/frame-alignment.js';
 
 class SpriteAnimatorApp {
   constructor() {
+    // 准星拖拽交互状态
+    this.isDraggingPivot = false;
+    this.pivotDragOrigin = null;
+    this.draggedFrame = null;
+
     this.initElements();
     this.initCanvasWorkspace();
     this.bindEvents();
@@ -445,6 +450,160 @@ class SpriteAnimatorApp {
     if (this.btnNextFrame) {
       this.btnNextFrame.addEventListener('click', () => switchFrameStep(1));
     }
+
+    // 7. 帧视口 (playerCanvas) 红色十字准星拖拽调整锚点交互
+    this.bindPlayerCanvasPivotDrag();
+  }
+
+  /**
+   * 绑定帧视口 (playerCanvas) 红色十字准星拖拽调整锚点交互
+   * 支持准星 10px 悬停光标感知、拖拽反推帧内像素坐标与实时重绘联动
+   */
+  bindPlayerCanvasPivotDrag() {
+    if (!this.playerCanvas) return;
+
+    // 鼠标按下：检测是否命中准星并开启拖拽
+    this.playerCanvas.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      const selectedFrame = state.getSelectedFrame();
+      const playerState = state.get('playerState') || {};
+      if (!selectedFrame || playerState.showPivot === false) return;
+
+      const mousePos = this.getPlayerCanvasMousePos(e);
+      const crosshairPos = this.getPlayerCanvasCrosshairPos(selectedFrame);
+
+      if (this.isNearCrosshair(mousePos, crosshairPos, 10)) {
+        this.isDraggingPivot = true;
+        this.draggedFrame = selectedFrame;
+        const targetBaseX = Math.round(this.playerCanvas.width / 2);
+        const targetBaseY = Math.round(this.playerCanvas.height * 0.82);
+        this.pivotDragOrigin = frameAlignment.calculateWorldRenderPos(selectedFrame, targetBaseX, targetBaseY);
+        this.playerCanvas.style.cursor = 'crosshair';
+        e.preventDefault();
+      }
+    });
+
+    // 鼠标移动：悬停显示十字光标，拖拽实时更新锚点与重绘
+    this.playerCanvas.addEventListener('mousemove', (e) => {
+      const mousePos = this.getPlayerCanvasMousePos(e);
+
+      if (this.isDraggingPivot && this.draggedFrame && this.pivotDragOrigin) {
+        const selectedFrame = this.draggedFrame;
+        const pixelX = mousePos.x - this.pivotDragOrigin.dx;
+        const pixelY = mousePos.y - this.pivotDragOrigin.dy;
+
+        frameAlignment.setCustomPivot(selectedFrame, pixelX, pixelY);
+        state.updateFrame(selectedFrame.id, { pivot: { ...selectedFrame.pivot } });
+
+        this.updatePivotGridUI(selectedFrame);
+        this.renderPlayerViewport();
+        this.renderMainCanvas();
+        this.setStatus(`拖拽调整锚点: 像素 (${Math.round(pixelX)}, ${Math.round(pixelY)}) | 比例 (${selectedFrame.pivot.x.toFixed(2)}, ${selectedFrame.pivot.y.toFixed(2)})`);
+        return;
+      }
+
+      // 悬停检测：当鼠标悬停在准星附近（命中半径 10px）时，光标显示为 crosshair
+      const selectedFrame = state.getSelectedFrame();
+      const playerState = state.get('playerState') || {};
+      if (selectedFrame && playerState.showPivot !== false) {
+        const crosshairPos = this.getPlayerCanvasCrosshairPos(selectedFrame);
+        if (this.isNearCrosshair(mousePos, crosshairPos, 10)) {
+          this.playerCanvas.style.cursor = 'crosshair';
+          return;
+        }
+      }
+      this.playerCanvas.style.cursor = '';
+    });
+
+    // 鼠标松开：结束拖拽
+    this.playerCanvas.addEventListener('mouseup', (e) => {
+      if (this.isDraggingPivot) {
+        this.isDraggingPivot = false;
+        this.draggedFrame = null;
+        this.pivotDragOrigin = null;
+
+        const selectedFrame = state.getSelectedFrame();
+        if (selectedFrame) {
+          const mousePos = this.getPlayerCanvasMousePos(e);
+          const crosshairPos = this.getPlayerCanvasCrosshairPos(selectedFrame);
+          this.playerCanvas.style.cursor = this.isNearCrosshair(mousePos, crosshairPos, 10) ? 'crosshair' : '';
+        } else {
+          this.playerCanvas.style.cursor = '';
+        }
+        this.setStatus('已完成帧锚点拖拽设置');
+      }
+    });
+
+    // 鼠标离开：若非拖拽中则重置光标
+    this.playerCanvas.addEventListener('mouseleave', () => {
+      if (!this.isDraggingPivot) {
+        this.playerCanvas.style.cursor = '';
+      }
+    });
+
+    // 全局 mouseup 保护，防止拖拽移出画布后松开按键状态卡死
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mouseup', () => {
+        if (this.isDraggingPivot) {
+          this.isDraggingPivot = false;
+          this.draggedFrame = null;
+          this.pivotDragOrigin = null;
+          if (this.playerCanvas) {
+            this.playerCanvas.style.cursor = '';
+          }
+          this.setStatus('已完成帧锚点拖拽设置');
+        }
+      });
+    }
+  }
+
+  /**
+   * 计算鼠标在 playerCanvas 中的实际像素坐标 (自动适配 CSS 缩放)
+   * @param {MouseEvent} e 
+   * @returns {{x: number, y: number}}
+   */
+  getPlayerCanvasMousePos(e) {
+    if (!this.playerCanvas) return { x: 0, y: 0 };
+    if (typeof this.playerCanvas.getBoundingClientRect !== 'function') {
+      return { x: e.clientX || 0, y: e.clientY || 0 };
+    }
+    const rect = this.playerCanvas.getBoundingClientRect();
+    const scaleX = rect.width > 0 ? this.playerCanvas.width / rect.width : 1;
+    const scaleY = rect.height > 0 ? this.playerCanvas.height / rect.height : 1;
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
+    };
+  }
+
+  /**
+   * 获取当前帧在 playerCanvas 视口中的十字准星屏幕像素坐标
+   * @param {Object} frame 
+   * @returns {{x: number, y: number}}
+   */
+  getPlayerCanvasCrosshairPos(frame) {
+    if (!this.playerCanvas) return { x: 0, y: 0 };
+    const targetBaseX = Math.round(this.playerCanvas.width / 2);
+    const targetBaseY = Math.round(this.playerCanvas.height * 0.82);
+    const ox = frame?.offset ? (frame.offset.x || 0) : 0;
+    const oy = frame?.offset ? (frame.offset.y || 0) : 0;
+    return {
+      x: targetBaseX + ox,
+      y: targetBaseY + oy
+    };
+  }
+
+  /**
+   * 判断鼠标位置是否在准星命中半径内 (默认 10px)
+   * @param {{x: number, y: number}} mousePos 
+   * @param {{x: number, y: number}} crosshairPos 
+   * @param {number} radius 
+   * @returns {boolean}
+   */
+  isNearCrosshair(mousePos, crosshairPos, radius = 10) {
+    if (!mousePos || !crosshairPos) return false;
+    const dist = Math.hypot(mousePos.x - crosshairPos.x, mousePos.y - crosshairPos.y);
+    return dist <= radius;
   }
 
   /**
@@ -965,8 +1124,10 @@ class SpriteAnimatorApp {
 }
 
 // 启动应用
-document.addEventListener('DOMContentLoaded', () => {
-  window.__SPRITE_ANIMATOR__ = new SpriteAnimatorApp();
-});
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    window.__SPRITE_ANIMATOR__ = new SpriteAnimatorApp();
+  });
+}
 
 export { SpriteAnimatorApp };

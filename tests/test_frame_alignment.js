@@ -209,14 +209,14 @@ console.log('\n▶ [测试组 5] 洋葱皮前后帧提取逻辑与边界处理:'
   assert(prevItem.frame.id === 'f0', '前向残影帧为 f0');
   assert(prevItem.index === 0, '前向残影索引为 0');
   assert(prevItem.color === '#ff4444', '前向残影着色为淡暖色 #ff4444');
-  assertClose(prevItem.alpha, 0.35, '前向残影默认透明度为 0.35');
+  assertClose(prevItem.alpha, 0.30, '前向残影默认透明度为 0.30');
 
   const nextItem = skinsMid.find(s => s.type === 'next');
   assert(nextItem !== undefined, '存在后向残影 (type: next)');
   assert(nextItem.frame.id === 'f2', '后向残影帧为 f2');
   assert(nextItem.index === 2, '后向残影索引为 2');
   assert(nextItem.color === '#00b4ff', '后向残影着色为淡冷色 #00b4ff');
-  assertClose(nextItem.alpha, 0.35, '后向残影默认透明度为 0.35');
+  assertClose(nextItem.alpha, 0.30, '后向残影默认透明度为 0.30');
 
   // Case 2: 边界处理 - 首帧 (index = 0)
   const skinsHead = frameAlignment.getOnionSkinFrames(testFrames, 0, 1, 1);
