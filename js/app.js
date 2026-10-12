@@ -326,6 +326,10 @@ class SpriteAnimatorApp {
       this.btnAddFrame.addEventListener('click', () => {
         if (!state.get('sourceImage')) {
           this.setStatus('请先导入精灵大图');
+          this.showToast('请先导入精灵大图，再添加选框', 'warning', {
+            label: '📂 立即选择图片',
+            onClick: () => this.fileInput?.click()
+          });
           return;
         }
         state.addFrame({
@@ -1176,6 +1180,10 @@ class SpriteAnimatorApp {
     const img = state.get('sourceImage');
     if (!img) {
       this.setStatus('请先导入精灵大图再执行识别');
+      this.showToast('请先导入精灵大图，再执行自动识别选框', 'warning', {
+        label: '📂 立即选择图片',
+        onClick: () => this.fileInput?.click()
+      });
       return;
     }
 
@@ -1187,7 +1195,8 @@ class SpriteAnimatorApp {
       const boxes = ImageProcessor.detectBoundingBoxes(imageData, 8, 4);
 
       if (boxes.length === 0) {
-        this.setStatus('未检测到独立选框。若图像包含白底/绿幕，请先点击【背景透明化】消除背景');
+        this.setStatus('未检测到独立选框。若图像包含黑底/白底/绿幕，请点击「⊞ 网格等分切片」或「背景透明化」');
+        this.showToast('未检测到独立透明选框，建议点击「⊞ 网格等分切片」进行规律切片', 'warning');
         return;
       }
 
@@ -1230,6 +1239,10 @@ class SpriteAnimatorApp {
         const img = state.get('sourceImage');
         if (!img) {
           this.setStatus('请先导入精灵大图');
+          this.showToast('请先导入精灵大图，再进行背景透明化', 'warning', {
+            label: '📂 立即选择图片',
+            onClick: () => this.fileInput?.click()
+          });
           return;
         }
 
@@ -1365,7 +1378,11 @@ class SpriteAnimatorApp {
       this.btnUnifySize.addEventListener('click', () => {
         const frames = state.get('frames') || [];
         if (frames.length === 0) {
-          this.setStatus('暂无动作帧，请先导入图片并添加选框');
+          this.setStatus('暂无动作帧，请先导入图片并添加或切片选框');
+          this.showToast('暂无动作帧，请先导入图片并添加或切片选框', 'warning', {
+            label: '📂 立即选择图片',
+            onClick: () => this.fileInput?.click()
+          });
           return;
         }
 
@@ -1506,6 +1523,10 @@ class SpriteAnimatorApp {
         const sourceImage = state.get('sourceImage');
         if (!sourceImage) {
           this.setStatus('请先导入精灵大图');
+          this.showToast('请先导入精灵大图，再使用网格切片功能', 'warning', {
+            label: '📂 立即选择图片',
+            onClick: () => this.fileInput?.click()
+          });
           return;
         }
         updateSliceSummary();
@@ -1527,6 +1548,12 @@ class SpriteAnimatorApp {
     if (this.gridPresetBtns) {
       this.gridPresetBtns.forEach(btn => {
         btn.addEventListener('click', () => {
+          this.gridPresetBtns.forEach(b => {
+            b.classList.remove('btn-primary');
+            b.classList.add('btn-secondary');
+          });
+          btn.classList.remove('btn-secondary');
+          btn.classList.add('btn-primary');
           const r = btn.dataset.rows;
           const c = btn.dataset.cols;
           if (r && this.gridRowsInput) this.gridRowsInput.value = r;
@@ -1939,6 +1966,59 @@ class SpriteAnimatorApp {
     if (this.statusMessage) {
       this.statusMessage.textContent = msg;
     }
+  }
+
+  /**
+   * 显示屏幕中上方全局悬浮 Toast 消息胶囊
+   * @param {string} msg 
+   * @param {'info'|'warning'|'error'|'success'} type 
+   * @param {{ label: string, onClick: Function }|null} action 
+   */
+  showToast(msg, type = 'info', action = null) {
+    if (typeof document === 'undefined') return;
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = `app-toast ${type}`;
+
+    let icon = 'ℹ️';
+    if (type === 'warning') icon = '⚠️';
+    else if (type === 'error') icon = '❌';
+    else if (type === 'success') icon = '✅';
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'toast-icon';
+    iconSpan.textContent = icon;
+    toast.appendChild(iconSpan);
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = msg;
+    toast.appendChild(textSpan);
+
+    if (action && action.label && typeof action.onClick === 'function') {
+      const actBtn = document.createElement('button');
+      actBtn.className = 'toast-action-btn';
+      actBtn.textContent = action.label;
+      actBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toast.remove();
+        action.onClick();
+      });
+      toast.appendChild(actBtn);
+    }
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(-10px) scale(0.95)';
+      setTimeout(() => toast.remove(), 250);
+    }, 4000);
   }
 
   initCanvas() {
