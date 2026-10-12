@@ -179,6 +179,7 @@ class SpriteAnimatorApp {
       renderCustom: (canvas, frame, allFrames, currentIndex, sourceImage, opts) => {
         if (!canvas) return;
         const ps = state.get('playerState') || {};
+        const effectiveZoom = ps.viewportScaleMode || ps.zoom || 'auto';
         frameAlignment.renderAlignmentStage(
           canvas,
           frame,
@@ -187,7 +188,8 @@ class SpriteAnimatorApp {
           sourceImage,
           {
             ...ps,
-            ...opts
+            ...opts,
+            zoom: effectiveZoom
           }
         );
       }
@@ -419,8 +421,11 @@ class SpriteAnimatorApp {
     if (this.playerZoomSelect) {
       this.playerZoomSelect.addEventListener('change', (e) => {
         const val = e.target.value;
-        state.setPlayerState({ viewportScaleMode: val });
+        state.setPlayerState({ viewportScaleMode: val, zoom: val });
         this.renderPlayerViewport();
+        if (this.player && this.player.isPlaying) {
+          this.player.render();
+        }
         this.setStatus(`视口缩放模式已设为: ${e.target.options[e.target.selectedIndex]?.text || val}`);
       });
     }
@@ -1945,6 +1950,7 @@ class SpriteAnimatorApp {
       }
     }
 
+    const effectiveZoom = playerState.viewportScaleMode || playerState.zoom || 'auto';
     frameAlignment.renderAlignmentStage(
       this.playerCanvas,
       currentFrame,
@@ -1953,7 +1959,7 @@ class SpriteAnimatorApp {
       sourceImage,
       {
         ...playerState,
-        zoom: playerState.viewportScaleMode || 'auto'
+        zoom: effectiveZoom
       }
     );
   }

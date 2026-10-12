@@ -117,7 +117,8 @@ class StateStore {
         onionSkinOpacity: 0.30,
         showGround: true,
         showPivot: true,
-        zoom: 1.0
+        zoom: 'auto',
+        viewportScaleMode: 'auto'
       }
     };
   }

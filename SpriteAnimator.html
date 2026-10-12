@@ -790,6 +790,7 @@ body {
   position: relative;
   overflow: hidden;
   background-color: #16161d;
+  min-height: 290px;
 }
 
 #player-canvas {
@@ -1015,7 +1016,7 @@ body {
         <div class="brand">
           <div class="brand-icon">⚡</div>
           <span>Sprite Animator</span>
-          <span class="badge-version">v1.3</span>
+          <span class="badge-version">v1.4</span>
         </div>
 
         <div class="toolbar-divider"></div>
@@ -1267,11 +1268,12 @@ body {
             <span>实时动画播放器</span>
             <div class="actions">
               <select class="select-input" id="player-zoom-select" title="播放器画面显示比例" style="max-width: 100px;">
-                <option value="auto">自适应完整</option>
+                <option value="auto" selected>自适应完整</option>
                 <option value="1.0">100% 原始</option>
                 <option value="0.75">75%</option>
                 <option value="0.5">50%</option>
                 <option value="0.35">35%</option>
+                <option value="0.25">25%</option>
               </select>
               <select class="select-input" id="loop-mode-select" title="播放循环模式" style="max-width: 110px;">
                 <option value="loop">循环播放</option>
@@ -1283,7 +1285,7 @@ body {
 
           <!-- 播放器视口舞台 -->
           <div class="player-stage-wrapper checkerboard-bg" id="player-wrapper">
-            <canvas id="player-canvas" width="256" height="256"></canvas>
+            <canvas id="player-canvas" width="288" height="288"></canvas>
             <div class="player-frame-indicator" id="player-frame-indicator">0 / 0</div>
           </div>
 
@@ -2309,7 +2311,8 @@ class StateStore {
         onionSkinOpacity: 0.30,
         showGround: true,
         showPivot: true,
-        zoom: 1.0
+        zoom: 'auto',
+        viewportScaleMode: 'auto'
       }
     };
   }
@@ -7022,6 +7025,7 @@ class SpriteAnimatorApp {
       renderCustom: (canvas, frame, allFrames, currentIndex, sourceImage, opts) => {
         if (!canvas) return;
         const ps = state.get('playerState') || {};
+        const effectiveZoom = ps.viewportScaleMode || ps.zoom || 'auto';
         frameAlignment.renderAlignmentStage(
           canvas,
           frame,
@@ -7030,7 +7034,8 @@ class SpriteAnimatorApp {
           sourceImage,
           {
             ...ps,
-            ...opts
+            ...opts,
+            zoom: effectiveZoom
           }
         );
       }
@@ -7262,8 +7267,11 @@ class SpriteAnimatorApp {
     if (this.playerZoomSelect) {
       this.playerZoomSelect.addEventListener('change', (e) => {
         const val = e.target.value;
-        state.setPlayerState({ viewportScaleMode: val });
+        state.setPlayerState({ viewportScaleMode: val, zoom: val });
         this.renderPlayerViewport();
+        if (this.player && this.player.isPlaying) {
+          this.player.render();
+        }
         this.setStatus(`视口缩放模式已设为: ${e.target.options[e.target.selectedIndex]?.text || val}`);
       });
     }
@@ -8788,6 +8796,7 @@ class SpriteAnimatorApp {
       }
     }
 
+    const effectiveZoom = playerState.viewportScaleMode || playerState.zoom || 'auto';
     frameAlignment.renderAlignmentStage(
       this.playerCanvas,
       currentFrame,
@@ -8796,7 +8805,7 @@ class SpriteAnimatorApp {
       sourceImage,
       {
         ...playerState,
-        zoom: playerState.viewportScaleMode || 'auto'
+        zoom: effectiveZoom
       }
     );
   }

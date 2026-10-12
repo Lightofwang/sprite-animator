@@ -15,7 +15,7 @@
         <div class="brand">
           <div class="brand-icon">⚡</div>
           <span>Sprite Animator</span>
-          <span class="badge-version">v1.3</span>
+          <span class="badge-version">v1.4</span>
         </div>
 
         <div class="toolbar-divider"></div>
@@ -267,11 +267,12 @@
             <span>实时动画播放器</span>
             <div class="actions">
               <select class="select-input" id="player-zoom-select" title="播放器画面显示比例" style="max-width: 100px;">
-                <option value="auto">自适应完整</option>
+                <option value="auto" selected>自适应完整</option>
                 <option value="1.0">100% 原始</option>
                 <option value="0.75">75%</option>
                 <option value="0.5">50%</option>
                 <option value="0.35">35%</option>
+                <option value="0.25">25%</option>
               </select>
               <select class="select-input" id="loop-mode-select" title="播放循环模式" style="max-width: 110px;">
                 <option value="loop">循环播放</option>
@@ -283,7 +284,7 @@
 
           <!-- 播放器视口舞台 -->
           <div class="player-stage-wrapper checkerboard-bg" id="player-wrapper">
-            <canvas id="player-canvas" width="256" height="256"></canvas>
+            <canvas id="player-canvas" width="288" height="288"></canvas>
             <div class="player-frame-indicator" id="player-frame-indicator">0 / 0</div>
           </div>
 

@@ -781,6 +781,7 @@ body {
   position: relative;
   overflow: hidden;
   background-color: #16161d;
+  min-height: 290px;
 }
 
 #player-canvas {
