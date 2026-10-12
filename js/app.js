@@ -9,6 +9,7 @@ import { CanvasWorkspace } from './core/canvas-workspace.js';
 import { overlapIsolator } from './core/overlap-isolator.js';
 import { FrameAlignment, frameAlignment } from './core/frame-alignment.js';
 import { AnimationPlayer } from './core/animation-player.js';
+import { Exporter } from './core/exporter.js';
 
 class SpriteAnimatorApp {
   constructor() {
@@ -34,8 +35,17 @@ class SpriteAnimatorApp {
     this.emptyPlaceholder = document.getElementById('empty-placeholder');
     this.btnExportDropdown = document.getElementById('btn-export-dropdown');
     this.exportMenu = document.getElementById('export-menu');
+    this.btnExportZip = document.getElementById('btn-export-zip');
+    this.btnExportSheet = document.getElementById('btn-export-sheet');
+    this.btnExportGif = document.getElementById('btn-export-gif');
     this.btnAutoDetect = document.getElementById('btn-auto-detect');
     this.btnRemoveBg = document.getElementById('btn-remove-bg');
+
+    // 导出进度模态框元素
+    this.modalExportProgress = document.getElementById('modal-export-progress');
+    this.exportModalTitle = document.getElementById('export-modal-title');
+    this.exportStatusText = document.getElementById('export-status-text');
+    this.exportProgressBar = document.getElementById('export-progress-bar');
 
     // 图像与信息 Badges
     this.imageNameBadge = document.getElementById('image-name-badge');
@@ -311,6 +321,26 @@ class SpriteAnimatorApp {
       });
       document.addEventListener('click', () => {
         this.exportMenu.classList.remove('show');
+      });
+    }
+
+    // 导出功能项点击处理
+    if (this.btnExportZip) {
+      this.btnExportZip.addEventListener('click', () => {
+        this.exportMenu?.classList.remove('show');
+        this.handleExportZip();
+      });
+    }
+    if (this.btnExportSheet) {
+      this.btnExportSheet.addEventListener('click', () => {
+        this.exportMenu?.classList.remove('show');
+        this.handleExportSheet();
+      });
+    }
+    if (this.btnExportGif) {
+      this.btnExportGif.addEventListener('click', () => {
+        this.exportMenu?.classList.remove('show');
+        this.handleExportGif();
       });
     }
 
@@ -819,6 +849,173 @@ class SpriteAnimatorApp {
         }
       });
     });
+  }
+
+  /**
+   * 显示导出进度模态框
+   * @param {string} title 
+   * @param {string} text 
+   * @param {number} percent 
+   */
+  showExportProgress(title, text, percent = 0) {
+    if (this.exportModalTitle) this.exportModalTitle.textContent = title;
+    if (this.exportStatusText) this.exportStatusText.textContent = text;
+    if (this.exportProgressBar) {
+      this.exportProgressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+    }
+    if (this.modalExportProgress) {
+      this.modalExportProgress.classList.add('active');
+    }
+    this.setStatus(text);
+  }
+
+  /**
+   * 平滑更新导出进度与说明
+   * @param {string} text 
+   * @param {number} percent 
+   */
+  updateExportProgress(text, percent) {
+    if (this.exportStatusText) this.exportStatusText.textContent = text;
+    if (this.exportProgressBar && percent !== undefined) {
+      this.exportProgressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+    }
+    this.setStatus(text);
+  }
+
+  /**
+   * 隐藏导出进度模态框
+   */
+  hideExportProgress() {
+    if (this.modalExportProgress) {
+      this.modalExportProgress.classList.remove('active');
+    }
+  }
+
+  /**
+   * 导出全部透明 PNG 序列帧 Zip 压缩包
+   */
+  async handleExportZip() {
+    const frames = state.get('frames') || [];
+    const sourceImage = state.get('sourceImage');
+    const playerState = state.get('playerState') || {};
+
+    if (frames.length === 0) {
+      this.setStatus('未检测到动作选框，请先导入图像并添加或识别选框');
+      return;
+    }
+
+    try {
+      this.showExportProgress('导出透明序列帧包 (.zip)', '正在准备动作帧数据...', 5);
+
+      const animName = state.get('imageMetadata')?.name?.replace(/\.[^/.]+$/, '') || 'sprite';
+      const result = await Exporter.exportFramesAsZip(frames, {
+        sourceImage,
+        fps: playerState.fps || 12,
+        name: animName,
+        filename: `${animName}_frames.zip`,
+        onProgress: (current, total, msg) => {
+          const percent = Math.round((current / (total || 1)) * 90);
+          this.updateExportProgress(msg || `正在处理第 ${current}/${total} 帧...`, percent);
+        }
+      });
+
+      this.updateExportProgress('导出完成，正在唤起文件下载...', 100);
+      setTimeout(() => this.hideExportProgress(), 600);
+
+      if (result.success) {
+        this.setStatus(`成功导出 ${result.count} 帧透明 PNG 序列帧包 (${animName}_frames.zip)`);
+      } else {
+        this.setStatus(`导出序列帧失败: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('[SpriteAnimator] 导出序列帧异常:', err);
+      this.hideExportProgress();
+      this.setStatus(`导出序列帧异常: ${err.message}`);
+    }
+  }
+
+  /**
+   * 导出重新规整排版无交叉的新 Sprite Sheet 透明大图
+   */
+  async handleExportSheet() {
+    const frames = state.get('frames') || [];
+    const sourceImage = state.get('sourceImage');
+
+    if (frames.length === 0) {
+      this.setStatus('未检测到动作选框，请先导入图像并添加或识别选框');
+      return;
+    }
+
+    try {
+      this.showExportProgress('导出新规整精灵表 (.png)', '正在重新计算无交叉安全排版网格...', 20);
+
+      const animName = state.get('imageMetadata')?.name?.replace(/\.[^/.]+$/, '') || 'spritesheet';
+      const result = await Exporter.exportNewSpriteSheet(frames, {
+        sourceImage,
+        padding: 16,
+        filename: `${animName}_clean_sheet.png`
+      });
+
+      this.updateExportProgress('新精灵大图合成完成，正在触发下载...', 100);
+      setTimeout(() => this.hideExportProgress(), 500);
+
+      if (result.success) {
+        const { columns, rows, width, height } = result.layout;
+        this.setStatus(`已导出全新规整精灵表 (${width} × ${height} px, ${columns}列×${rows}行, 16px安全间隔，绝无交叉重叠)`);
+      } else {
+        this.setStatus(`导出精灵表失败: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('[SpriteAnimator] 导出精灵表异常:', err);
+      this.hideExportProgress();
+      this.setStatus(`导出精灵表异常: ${err.message}`);
+    }
+  }
+
+  /**
+   * 导出动画 GIF 动图
+   */
+  async handleExportGif() {
+    const frames = state.get('frames') || [];
+    const sourceImage = state.get('sourceImage');
+    const playerState = state.get('playerState') || {};
+
+    if (frames.length === 0) {
+      this.setStatus('未检测到动作选框，请先导入图像并添加或识别选框');
+      return;
+    }
+
+    try {
+      this.showExportProgress('导出动图 (.gif)', '正在初始化 GIF 动画编码器...', 5);
+
+      const animName = state.get('imageMetadata')?.name?.replace(/\.[^/.]+$/, '') || 'sprite_animation';
+      const result = await Exporter.exportAnimationAsGif(
+        frames,
+        {
+          sourceImage,
+          fps: playerState.fps || 12,
+          filename: `${animName}.gif`,
+          onProgress: (current, total, msg) => {
+            const percent = Math.round((current / (total || 1)) * 90);
+            this.updateExportProgress(msg || `正在编码第 ${current}/${total} 帧...`, percent);
+          }
+        },
+        playerState
+      );
+
+      this.updateExportProgress('动图生成完毕，正在触发下载...', 100);
+      setTimeout(() => this.hideExportProgress(), 600);
+
+      if (result.success) {
+        this.setStatus(`动画动图导出成功: ${animName}.gif (${result.count} 帧, ${result.fps} FPS)`);
+      } else {
+        this.setStatus(`导出动图失败: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('[SpriteAnimator] 导出动图异常:', err);
+      this.hideExportProgress();
+      this.setStatus(`导出动图异常: ${err.message}`);
+    }
   }
 
   /**

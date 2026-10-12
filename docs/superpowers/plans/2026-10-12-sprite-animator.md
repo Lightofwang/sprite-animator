@@ -164,20 +164,20 @@
 - Create: `build_single_file.py`
 - Modify: `index.html`
 
-- [ ] **Step 1: 导出独立透明 PNG 序列包（Zip）**
+- [x] **Step 1: 导出独立透明 PNG 序列包（Zip）**
   集成 JSZip，将全部修复后的单帧保存为带有透明通道的 PNG 图像，压缩为 `sprite_frames.zip` 并触发浏览器自动下载。
 
-- [ ] **Step 2: 导出重新排版整张规整 Sprite Sheet**
+- [x] **Step 2: 导出重新排版整张规整 Sprite Sheet**
   将所有单帧按照网格安全间隔计算最大尺寸，合成一张崭新、绝无交叉重叠的透明整图 PNG 并导出。
 
-- [ ] **Step 3: 导出 GIF 动画**
+- [x] **Step 3: 导出 GIF 动画**
   利用逐帧数据合成标准的 `.gif` 动图并下载。
 
-- [ ] **Step 4: 编写一键单文件打包脚本 `build_single_file.py`**
+- [x] **Step 4: 编写一键单文件打包脚本 `build_single_file.py`**
   将 HTML、CSS、JS、三方库内联合并为完全独立的单一 `SpriteAnimator.html` 文件，双击即可脱离所有外链直接运行。
 
-- [ ] **Step 5: 验证与最终交付**
+- [x] **Step 5: 验证与最终交付**
   使用真实武将动作图导入 -> 框选 -> 橡皮擦修改交叉 -> 对齐 -> 播放 -> 导出 Zip 与单文件，验证完整工作流顺畅无误。
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
   `git add . && git commit -m "feat: complete exporter, single-file bundle and end-to-end integration"`

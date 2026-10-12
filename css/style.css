@@ -869,3 +869,16 @@ body {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* 导出进度条专用样式 */
+.export-spinner {
+  font-size: 28px;
+  animation: pulse-rotate 1.2s infinite ease-in-out;
+  display: inline-block;
+}
+
+@keyframes pulse-rotate {
+  0% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(180deg); }
+  100% { transform: scale(1) rotate(360deg); }
+}
