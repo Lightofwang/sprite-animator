@@ -1,0 +1,7 @@
+{
+  "name": "sprite-animator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sprite Sheet Frame Overlap Isolator and Animation Player"
+}
