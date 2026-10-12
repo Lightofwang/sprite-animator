@@ -440,8 +440,65 @@ export class Exporter {
       };
     }
 
-    const width = Math.max(32, options.width || 256);
-    const height = Math.max(32, options.height || 256);
+    // 2. 计算所有帧在基准锚点对齐下的完整包围盒 (Boundings)
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    let minTop = Infinity;
+    let maxBottom = -Infinity;
+
+    frames.forEach(frame => {
+      const fw = frame.rect?.w || 32;
+      const fh = frame.rect?.h || 32;
+      const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
+      const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
+      const ox = (frame.offset && frame.offset.x) || 0;
+      const oy = (frame.offset && frame.offset.y) || 0;
+
+      const l = ox - fw * px;
+      const r = ox + fw * (1 - px);
+      const t = oy - fh * py;
+      const b = oy + fh * (1 - py);
+
+      if (l < minLeft) minLeft = l;
+      if (r > maxRight) maxRight = r;
+      if (t < minTop) minTop = t;
+      if (b > maxBottom) maxBottom = b;
+    });
+
+    const contentW = Math.max(16, maxRight - minLeft);
+    const contentH = Math.max(16, maxBottom - minTop);
+
+    // 安全留白边距 (保证武器刃尖与羽毛不贴边)
+    const padding = 16;
+    const rawTotalW = Math.ceil(contentW + padding * 2);
+    const rawTotalH = Math.ceil(contentH + padding * 2);
+
+    let width = options.width ? Math.max(32, options.width) : null;
+    let height = options.height ? Math.max(32, options.height) : null;
+    let scale = 1.0;
+
+    if (width && height) {
+      // 若外部显式指定了宽高 (例如测试用例或固定视口)
+      // 计算自适应缩放比，确保整个人物和动作 100% 容纳在视口内部，绝不被裁切
+      const availW = Math.max(16, width - padding * 2);
+      const availH = Math.max(16, height - padding * 2);
+      scale = Math.min(availW / contentW, availH / contentH);
+    } else {
+      // 默认根据全部动作帧包围盒自适应计算最佳尺寸 (上限 512px，兼顾高清与快速编码)
+      const maxDim = 512;
+      scale = Math.min(1.0, maxDim / Math.max(rawTotalW, rawTotalH));
+      width = Math.round(rawTotalW * scale);
+      height = Math.round(rawTotalH * scale);
+    }
+
+    // 确保宽高为偶数 (提升各平台 GIF 播放器兼容性)
+    width = (width % 2 !== 0) ? width + 1 : width;
+    height = (height % 2 !== 0) ? height + 1 : height;
+
+    // 计算基准点渲染坐标 (使所有动作帧在画布中央统一基准对齐)
+    const targetBaseX = Math.round((width / 2) - ((minLeft + maxRight) / 2) * scale);
+    const targetBaseY = Math.round((height / 2) - ((minTop + maxBottom) / 2) * scale);
+
     const fps = options.fps || playerState?.fps || 12;
     const delayMs = Math.round(1000 / fps);
     const loop = options.loop !== undefined ? options.loop : 0;
@@ -452,10 +509,6 @@ export class Exporter {
     try {
       onProgress(0, frames.length, '正在初始化 GIF 动画编码器...');
       const encoder = new GIFEncoder(width, height, { loop });
-
-      // 世界基准对齐原点 (画布中心与底部参考线 0.82)
-      const targetBaseX = Math.round(width / 2);
-      const targetBaseY = Math.round(height * 0.82);
 
       // 单帧离屏渲染画布
       const frameCanvas = this.createCanvas(width, height);
@@ -474,11 +527,13 @@ export class Exporter {
           const ox = (frame.offset && frame.offset.x) || 0;
           const oy = (frame.offset && frame.offset.y) || 0;
 
-          // 计算世界左上角对齐绘制点
-          const dx = Math.round(targetBaseX + ox - fw * px);
-          const dy = Math.round(targetBaseY + oy - fh * py);
+          // 计算世界左上角对齐绘制点与缩放宽高
+          const dx = Math.round(targetBaseX + (ox - fw * px) * scale);
+          const dy = Math.round(targetBaseY + (oy - fh * py) * scale);
+          const dw = Math.round(fw * scale);
+          const dh = Math.round(fh * scale);
 
-          this.drawFrameToContext(fctx, frame, dx, dy, fw, fh, sourceImage);
+          this.drawFrameToContext(fctx, frame, dx, dy, dw, dh, sourceImage);
 
           // 传入当前帧数据
           const imgData = fctx.getImageData(0, 0, width, height);
