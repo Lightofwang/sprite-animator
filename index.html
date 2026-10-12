@@ -279,6 +279,44 @@
     </main>
   </div>
 
+  <!-- 背景透明化配置模态框 -->
+  <div class="modal-overlay" id="modal-remove-bg">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span>消除背景并透明化 (Background Transparency)</span>
+        <button class="btn btn-icon btn-secondary" id="btn-close-bg-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size: 12px; color: var(--text-sub); line-height: 1.5;">
+          选择要扣除为透明的纯色背景色，并调节容差以消除边缘杂色：
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <label style="width: 80px; font-weight: 500;">预设色彩:</label>
+          <div style="display: flex; gap: 6px; flex: 1;">
+            <button class="btn btn-secondary preset-color-btn" data-color="#ffffff" style="flex: 1;">⚪ 纯白</button>
+            <button class="btn btn-secondary preset-color-btn" data-color="#00ff00" style="flex: 1;">🟢 绿幕</button>
+            <button class="btn btn-secondary" id="btn-sample-top-left" style="flex: 1.2;">🎯 左上角原色</button>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <label style="width: 80px; font-weight: 500;">目标颜色:</label>
+          <input type="color" id="bg-color-picker" value="#ffffff" style="width: 44px; height: 30px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer; background: transparent;">
+          <input type="text" id="bg-color-hex" value="#FFFFFF" style="width: 90px; height: 30px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-main); text-align: center; font-family: var(--font-mono); font-size: 12px;">
+          <span id="bg-color-preview-box" style="width: 24px; height: 24px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background-color: #ffffff;"></span>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <label style="width: 80px; font-weight: 500;">扣图容差:</label>
+          <input type="range" id="modal-tolerance-slider" min="0" max="100" value="20" style="flex: 1; accent-color: var(--accent-blue);">
+          <span id="modal-tolerance-val" style="width: 36px; text-align: right; font-family: var(--font-mono); font-weight: 600; color: var(--accent-yellow);">20</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-cancel-remove-bg">取消</button>
+        <button class="btn btn-primary" id="btn-confirm-remove-bg">应用透明化</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 引入 ES6 核心主入口模块 -->
   <script type="module" src="js/app.js"></script>
 </body>
