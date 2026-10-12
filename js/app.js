@@ -5,10 +5,12 @@
 
 import { state, eventBus } from './core/state.js';
 import { ImageProcessor, parseColor } from './core/image-processor.js';
+import { CanvasWorkspace } from './core/canvas-workspace.js';
 
 class SpriteAnimatorApp {
   constructor() {
     this.initElements();
+    this.initCanvasWorkspace();
     this.bindEvents();
     this.bindStateSubscriptions();
     this.initCanvas();
@@ -78,6 +80,52 @@ class SpriteAnimatorApp {
     this.presetColorBtns = document.querySelectorAll('.preset-color-btn');
     this.modalToleranceSlider = document.getElementById('modal-tolerance-slider');
     this.modalToleranceVal = document.getElementById('modal-tolerance-val');
+  }
+
+  initCanvasWorkspace() {
+    if (this.mainCanvas && this.viewportContainer) {
+      this.canvasWorkspace = new CanvasWorkspace(this.mainCanvas, this.viewportContainer);
+      this.canvasWorkspace.onFrameRectChange = (frameId) => {
+        this.updateSelectedFrameUI(frameId);
+        this.updateSingleThumbnail(frameId);
+      };
+    }
+  }
+
+  /**
+   * 局部快速更新单个帧缩略图
+   * @param {string} frameId 
+   */
+  updateSingleThumbnail(frameId) {
+    if (!this.frameList) return;
+    const itemEl = this.frameList.querySelector(`.frame-item[data-id="${frameId}"]`);
+    if (!itemEl) return;
+
+    const thumbCanvas = itemEl.querySelector('.frame-thumb-canvas');
+    if (!thumbCanvas) return;
+
+    const frame = state.get('frames').find(f => f.id === frameId);
+    const sourceImage = state.get('sourceImage');
+    if (!frame || !sourceImage) return;
+
+    const tctx = thumbCanvas.getContext('2d');
+    if (!tctx) return;
+
+    tctx.clearRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+    if (frame.rect.w > 0 && frame.rect.h > 0) {
+      tctx.imageSmoothingEnabled = false;
+      const scale = Math.min(60 / frame.rect.w, 60 / frame.rect.h);
+      const dw = frame.rect.w * scale;
+      const dh = frame.rect.h * scale;
+      const dx = (66 - dw) / 2;
+      const dy = (66 - dh) / 2;
+
+      tctx.drawImage(
+        sourceImage,
+        frame.rect.x, frame.rect.y, frame.rect.w, frame.rect.h,
+        dx, dy, dw, dh
+      );
+    }
   }
 
   bindEvents() {
@@ -182,22 +230,32 @@ class SpriteAnimatorApp {
     }
 
     // 缩放滑块与快捷缩放
-    if (this.zoomSlider && this.zoomDisplay) {
+    if (this.zoomSlider) {
       this.zoomSlider.addEventListener('input', (e) => {
         const zoomPercent = parseInt(e.target.value, 10);
-        this.zoomDisplay.textContent = `${zoomPercent}%`;
-        state.setState({
-          viewport: { ...state.get('viewport'), zoom: zoomPercent / 100 }
-        });
+        if (this.canvasWorkspace) {
+          this.canvasWorkspace.setZoom(zoomPercent / 100);
+        }
+      });
+    }
+    if (this.btnZoomIn) {
+      this.btnZoomIn.addEventListener('click', () => {
+        if (this.canvasWorkspace) this.canvasWorkspace.zoomIn();
+      });
+    }
+    if (this.btnZoomOut) {
+      this.btnZoomOut.addEventListener('click', () => {
+        if (this.canvasWorkspace) this.canvasWorkspace.zoomOut();
+      });
+    }
+    if (this.btnZoomFit) {
+      this.btnZoomFit.addEventListener('click', () => {
+        if (this.canvasWorkspace) this.canvasWorkspace.fitToView();
       });
     }
     if (this.btnZoom100) {
       this.btnZoom100.addEventListener('click', () => {
-        if (this.zoomSlider) this.zoomSlider.value = 100;
-        if (this.zoomDisplay) this.zoomDisplay.textContent = '100%';
-        state.setState({
-          viewport: { ...state.get('viewport'), zoom: 1.0 }
-        });
+        if (this.canvasWorkspace) this.canvasWorkspace.resetZoom();
       });
     }
 
@@ -224,9 +282,6 @@ class SpriteAnimatorApp {
         state.setPlayerState({ isPlaying });
       });
     }
-
-    // 主画布光标与点击交互
-    this.bindMainCanvasInteraction();
   }
 
   /**
@@ -289,18 +344,11 @@ class SpriteAnimatorApp {
         selectedFrameId: null
       });
 
-      // 调整画布物理分辨率
-      if (this.mainCanvas) {
-        this.mainCanvas.width = img.naturalWidth;
-        this.mainCanvas.height = img.naturalHeight;
-      }
-
       // 更新顶部 Badges
       if (this.imageNameBadge) this.imageNameBadge.textContent = file.name;
       if (this.imageDimBadge) this.imageDimBadge.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
 
       this.setStatus(`图像载入成功: ${file.name} (${img.naturalWidth} × ${img.naturalHeight})`);
-      this.renderMainCanvas();
       this.renderFrameList();
     } catch (err) {
       console.error('[SpriteAnimator] 加载图像失败:', err);
@@ -491,52 +539,6 @@ class SpriteAnimatorApp {
   }
 
   /**
-   * 绑定主画布光标坐标指示与点击选框选择
-   */
-  bindMainCanvasInteraction() {
-    if (!this.mainCanvas) return;
-
-    this.mainCanvas.addEventListener('mousemove', (e) => {
-      const rect = this.mainCanvas.getBoundingClientRect();
-      const scaleX = this.mainCanvas.width / rect.width;
-      const scaleY = this.mainCanvas.height / rect.height;
-      const x = Math.floor((e.clientX - rect.left) * scaleX);
-      const y = Math.floor((e.clientY - rect.top) * scaleY);
-
-      if (this.cursorPosBadge) {
-        this.cursorPosBadge.textContent = `X: ${x}, Y: ${y}`;
-      }
-    });
-
-    this.mainCanvas.addEventListener('mouseleave', () => {
-      if (this.cursorPosBadge) {
-        this.cursorPosBadge.textContent = 'X: 0, Y: 0';
-      }
-    });
-
-    this.mainCanvas.addEventListener('click', (e) => {
-      const frames = state.get('frames');
-      if (!frames || frames.length === 0) return;
-
-      const rect = this.mainCanvas.getBoundingClientRect();
-      const scaleX = this.mainCanvas.width / rect.width;
-      const scaleY = this.mainCanvas.height / rect.height;
-      const x = (e.clientX - rect.left) * scaleX;
-      const y = (e.clientY - rect.top) * scaleY;
-
-      // 逆序查找（优先命中顶层选框）
-      const hitFrame = [...frames].reverse().find(f => {
-        const { x: rx, y: ry, w, h } = f.rect;
-        return x >= rx && x <= rx + w && y >= ry && y <= ry + h;
-      });
-
-      if (hitFrame) {
-        state.selectFrame(hitFrame.id);
-      }
-    });
-  }
-
-  /**
    * 状态订阅与动态刷新
    */
   bindStateSubscriptions() {
@@ -563,101 +565,43 @@ class SpriteAnimatorApp {
       }
     });
 
+    // 监听视口变换，同步顶栏缩放比例显示与滑块
+    state.subscribe('viewport', (vp) => {
+      const zoomPercent = Math.round(vp.zoom * 100);
+      if (this.zoomDisplay) {
+        this.zoomDisplay.textContent = `${zoomPercent}%`;
+      }
+      if (this.zoomSlider) {
+        this.zoomSlider.value = zoomPercent;
+      }
+    });
+
     // 监听图像导入以隐藏空状态提示并重绘
     state.subscribe('sourceImage', (img) => {
       if (this.emptyPlaceholder) {
         this.emptyPlaceholder.style.display = img ? 'none' : 'flex';
       }
-      this.renderMainCanvas();
       this.renderFrameList();
     });
 
-    // 监听帧列表变化重绘
+    // 监听帧列表变化更新缩略图列表
     state.subscribe('frames', () => {
-      this.renderMainCanvas();
       this.renderFrameList();
     });
 
     // 监听选中帧变化高亮
     state.subscribe('selectedFrameId', (selectedId) => {
-      this.renderMainCanvas();
       this.updateSelectedFrameUI(selectedId);
     });
   }
 
   /**
-   * 绘制主画布图像及所有动作选框
+   * 触发主画布重绘 (由 CanvasWorkspace 代理调度)
    */
   renderMainCanvas() {
-    if (!this.mainCanvas) return;
-    const ctx = this.mainCanvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, this.mainCanvas.width, this.mainCanvas.height);
-
-    const sourceImage = state.get('sourceImage');
-    if (sourceImage) {
-      ctx.drawImage(sourceImage, 0, 0);
+    if (this.canvasWorkspace) {
+      this.canvasWorkspace.requestRender();
     }
-
-    const frames = state.get('frames') || [];
-    const selectedId = state.get('selectedFrameId');
-
-    // 绘制每个选框
-    frames.forEach((frame, idx) => {
-      const { x, y, w, h } = frame.rect;
-      const isSelected = frame.id === selectedId;
-
-      ctx.save();
-      if (isSelected) {
-        // 选中选框样式：明亮金黄高亮框
-        ctx.fillStyle = 'rgba(255, 209, 102, 0.2)';
-        ctx.fillRect(x, y, w, h);
-
-        ctx.strokeStyle = '#ffd166';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 3]);
-        ctx.strokeRect(x, y, w, h);
-        ctx.setLineDash([]);
-
-        // 绘制锚点 (Pivot) 准星
-        const pivotX = x + w * (frame.pivot?.x ?? 0.5);
-        const pivotY = y + h * (frame.pivot?.y ?? 1.0);
-
-        ctx.strokeStyle = '#ff006e';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(pivotX, pivotY, 5, 0, Math.PI * 2);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(pivotX - 8, pivotY);
-        ctx.lineTo(pivotX + 8, pivotY);
-        ctx.moveTo(pivotX, pivotY - 8);
-        ctx.lineTo(pivotX, pivotY + 8);
-        ctx.stroke();
-      } else {
-        // 普通未选中选框样式：半透明青蓝线框
-        ctx.fillStyle = 'rgba(58, 134, 255, 0.08)';
-        ctx.fillRect(x, y, w, h);
-
-        ctx.strokeStyle = 'rgba(58, 134, 255, 0.85)';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(x, y, w, h);
-      }
-
-      // 绘制序号徽章标签
-      const badgeText = `${idx + 1}`;
-      ctx.font = '10px monospace';
-      ctx.fillStyle = isSelected ? '#ffd166' : 'rgba(58, 134, 255, 0.9)';
-      const textWidth = ctx.measureText(badgeText).width;
-      ctx.fillRect(x, Math.max(0, y - 14), textWidth + 8, 14);
-
-      ctx.fillStyle = '#000';
-      ctx.fillText(badgeText, x + 4, Math.max(10, y - 3));
-
-      ctx.restore();
-    });
   }
 
   /**
