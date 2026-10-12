@@ -519,9 +519,9 @@ class SpriteAnimatorApp {
         return;
       }
 
-      // 左箭头 (ArrowLeft) / 右箭头 (ArrowRight)：若处于暂停且未按 Shift，作为上一帧/下一帧快速切换
-      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.shiftKey) {
-        if (this.player && !this.player.isPlaying) {
+      // Alt + 左/右箭头：作为单帧步进快捷键（上一帧 / 下一帧）
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && e.altKey) {
+        if (this.player) {
           e.preventDefault();
           if (e.key === 'ArrowLeft') {
             this.player.prevFrame();
@@ -530,13 +530,16 @@ class SpriteAnimatorApp {
           }
           const frame = this.player.getCurrentFrame();
           if (frame) state.selectFrame(frame.id);
-          this.setStatus(`单步切换: 第 ${this.player.currentFrameIndex + 1} 帧 (按 Shift+方向键可微调像素对齐)`);
+          this.setStatus(`单步切换: 第 ${this.player.currentFrameIndex + 1} 帧`);
           return;
         }
       }
 
-      // 方向键 1px/10px 像素偏移量微调 (Shift + 左右箭头，或 上下箭头)
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      // 方向键 1px/10px 像素偏移量微调（仅在未播放动画时生效，防止播放中误触）
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !e.altKey) {
+        // 如果动画正在播放，不修改偏移量
+        if (this.player && this.player.isPlaying) return;
+
         const selectedFrame = state.getSelectedFrame();
         if (!selectedFrame) return;
 
