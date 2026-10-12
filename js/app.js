@@ -6,6 +6,7 @@
 import { state, eventBus } from './core/state.js';
 import { ImageProcessor, parseColor } from './core/image-processor.js';
 import { CanvasWorkspace } from './core/canvas-workspace.js';
+import { overlapIsolator } from './core/overlap-isolator.js';
 
 class SpriteAnimatorApp {
   constructor() {
@@ -89,6 +90,10 @@ class SpriteAnimatorApp {
         this.updateSelectedFrameUI(frameId);
         this.updateSingleThumbnail(frameId);
       };
+      this.canvasWorkspace.onFrameModified = (frameId) => {
+        this.updateSingleThumbnail(frameId);
+        this.setStatus('当前帧局部像素已修整更新 (已记录历史快照，支持 Ctrl+Z 撤销 / Ctrl+Y 重做)');
+      };
     }
   }
 
@@ -106,7 +111,7 @@ class SpriteAnimatorApp {
 
     const frame = state.get('frames').find(f => f.id === frameId);
     const sourceImage = state.get('sourceImage');
-    if (!frame || !sourceImage) return;
+    if (!frame) return;
 
     const tctx = thumbCanvas.getContext('2d');
     if (!tctx) return;
@@ -120,11 +125,19 @@ class SpriteAnimatorApp {
       const dx = (66 - dw) / 2;
       const dy = (66 - dh) / 2;
 
-      tctx.drawImage(
-        sourceImage,
-        frame.rect.x, frame.rect.y, frame.rect.w, frame.rect.h,
-        dx, dy, dw, dh
-      );
+      if (frame.maskCanvas) {
+        tctx.drawImage(
+          frame.maskCanvas,
+          0, 0, frame.rect.w, frame.rect.h,
+          dx, dy, dw, dh
+        );
+      } else if (sourceImage) {
+        tctx.drawImage(
+          sourceImage,
+          frame.rect.x, frame.rect.y, frame.rect.w, frame.rect.h,
+          dx, dy, dw, dh
+        );
+      }
     }
   }
 
@@ -635,7 +648,7 @@ class SpriteAnimatorApp {
       thumbCanvas.height = 66;
       const tctx = thumbCanvas.getContext('2d');
 
-      if (sourceImage && tctx && frame.rect.w > 0 && frame.rect.h > 0) {
+      if (tctx && frame.rect.w > 0 && frame.rect.h > 0) {
         tctx.imageSmoothingEnabled = false;
         const scale = Math.min(60 / frame.rect.w, 60 / frame.rect.h);
         const dw = frame.rect.w * scale;
@@ -643,11 +656,19 @@ class SpriteAnimatorApp {
         const dx = (66 - dw) / 2;
         const dy = (66 - dh) / 2;
 
-        tctx.drawImage(
-          sourceImage,
-          frame.rect.x, frame.rect.y, frame.rect.w, frame.rect.h,
-          dx, dy, dw, dh
-        );
+        if (frame.maskCanvas) {
+          tctx.drawImage(
+            frame.maskCanvas,
+            0, 0, frame.rect.w, frame.rect.h,
+            dx, dy, dw, dh
+          );
+        } else if (sourceImage) {
+          tctx.drawImage(
+            sourceImage,
+            frame.rect.x, frame.rect.y, frame.rect.w, frame.rect.h,
+            dx, dy, dw, dh
+          );
+        }
       }
 
       const badge = document.createElement('div');

@@ -5,6 +5,7 @@
  */
 
 import { state, eventBus } from './state.js';
+import { overlapIsolator } from './overlap-isolator.js';
 
 export class CanvasWorkspace {
   /**
@@ -22,6 +23,13 @@ export class CanvasWorkspace {
     this.isMovingBox = false;
     this.isCreatingBox = false;
     this.spacePressed = false;
+
+    // 交叉消除专属工具交互状态
+    this.isErasing = false;
+    this.lastEraserLocalPos = null;
+    this.lassoPoints = []; // 局部坐标 [{ x, y }]
+    this.hoverScreenPos = null;
+    this.hoverWorldPos = null;
 
     // 当前激活的缩放手柄 ('nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w')
     this.activeHandle = null;
@@ -43,6 +51,7 @@ export class CanvasWorkspace {
 
     // 监听回调
     this.onFrameRectChange = null; // (frameId, rect) => void
+    this.onFrameModified = null; // (frameId) => void
 
     this.init();
   }
@@ -373,6 +382,11 @@ export class CanvasWorkspace {
       this.handleMouseDown(e);
     });
 
+    // 双击快速闭合套索
+    this.canvas.addEventListener('dblclick', (e) => {
+      this.handleDoubleClick(e);
+    });
+
     // 全局鼠标移动与松开（防止移出画布时断开拖拽）
     window.addEventListener('mousemove', (e) => {
       this.handleMouseMove(e);
@@ -386,6 +400,23 @@ export class CanvasWorkspace {
     this.canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
     });
+  }
+
+  handleDoubleClick(e) {
+    const currentTool = state.get('currentTool');
+    const selectedFrame = state.getSelectedFrame();
+
+    // 双击自动闭合多边形套索并执行裁切
+    if (currentTool === 'lasso' && selectedFrame && this.lassoPoints.length >= 3) {
+      overlapIsolator.initFrameCanvas(selectedFrame, state.get('sourceImage'));
+      overlapIsolator.saveSnapshot(selectedFrame);
+      overlapIsolator.applyPolygonLasso(selectedFrame, this.lassoPoints, true);
+      this.lassoPoints = [];
+      this.requestRender();
+      if (this.onFrameModified) {
+        this.onFrameModified(selectedFrame.id);
+      }
+    }
   }
 
   handleMouseDown(e) {
@@ -442,12 +473,98 @@ export class CanvasWorkspace {
         // 点击空白处取消当前选择
         state.selectFrame(null);
       }
+      return;
+    }
+
+    // 4. 当前处于橡皮擦模式 (eraser)
+    if (currentTool === 'eraser') {
+      let targetFrame = selectedFrame;
+      if (!targetFrame || !this.hitTestFrame(worldPos, targetFrame)) {
+        const hitFrame = this.findHitFrame(worldPos);
+        if (hitFrame) {
+          state.selectFrame(hitFrame.id);
+          targetFrame = hitFrame;
+        }
+      }
+
+      if (targetFrame && this.hitTestFrame(worldPos, targetFrame)) {
+        overlapIsolator.initFrameCanvas(targetFrame, state.get('sourceImage'));
+        overlapIsolator.saveSnapshot(targetFrame);
+
+        const lx = worldPos.x - targetFrame.rect.x;
+        const ly = worldPos.y - targetFrame.rect.y;
+        const brushSize = state.get('brushSize') || 10;
+
+        overlapIsolator.applyEraser(targetFrame, lx, ly, brushSize, null, null);
+        this.isErasing = true;
+        this.lastEraserLocalPos = { x: lx, y: ly };
+        this.requestRender();
+        if (this.onFrameModified) {
+          this.onFrameModified(targetFrame.id);
+        }
+      }
+      return;
+    }
+
+    // 5. 当前处于多边形套索模式 (lasso)
+    if (currentTool === 'lasso') {
+      let targetFrame = selectedFrame;
+      if (!targetFrame || !this.hitTestFrame(worldPos, targetFrame)) {
+        const hitFrame = this.findHitFrame(worldPos);
+        if (hitFrame) {
+          state.selectFrame(hitFrame.id);
+          targetFrame = hitFrame;
+          this.lassoPoints = [];
+        }
+      }
+
+      if (targetFrame && this.hitTestFrame(worldPos, targetFrame)) {
+        overlapIsolator.initFrameCanvas(targetFrame, state.get('sourceImage'));
+        const lx = worldPos.x - targetFrame.rect.x;
+        const ly = worldPos.y - targetFrame.rect.y;
+        this.lassoPoints.push({ x: lx, y: ly });
+        this.requestRender();
+      }
+      return;
+    }
+
+    // 6. 当前处于魔棒去色模式 (wand)
+    if (currentTool === 'wand') {
+      let targetFrame = selectedFrame;
+      if (!targetFrame || !this.hitTestFrame(worldPos, targetFrame)) {
+        const hitFrame = this.findHitFrame(worldPos);
+        if (hitFrame) {
+          state.selectFrame(hitFrame.id);
+          targetFrame = hitFrame;
+        }
+      }
+
+      if (targetFrame && this.hitTestFrame(worldPos, targetFrame)) {
+        overlapIsolator.initFrameCanvas(targetFrame, state.get('sourceImage'));
+        overlapIsolator.saveSnapshot(targetFrame);
+
+        const lx = worldPos.x - targetFrame.rect.x;
+        const ly = worldPos.y - targetFrame.rect.y;
+        const tolerance = state.get('tolerance') ?? 20;
+
+        const modified = overlapIsolator.applyMagicWand(targetFrame, lx, ly, tolerance, true);
+        if (modified) {
+          this.requestRender();
+          if (this.onFrameModified) {
+            this.onFrameModified(targetFrame.id);
+          }
+        }
+      }
+      return;
     }
   }
 
   handleMouseMove(e) {
     const screenPos = this.getEventScreenPos(e);
     const worldPos = this.screenToWorld(screenPos.x, screenPos.y);
+
+    this.hoverScreenPos = screenPos;
+    this.hoverWorldPos = worldPos;
 
     // 1. 正在平移视口
     if (this.isPanning) {
@@ -485,8 +602,36 @@ export class CanvasWorkspace {
       return;
     }
 
-    // 5. 悬停状态：更新光标样式与底部坐标
+    // 5. 正在使用橡皮擦连续涂抹 (Erasing)
+    if (this.isErasing && this.lastEraserLocalPos) {
+      const selectedFrame = state.getSelectedFrame();
+      if (selectedFrame) {
+        const lx = worldPos.x - selectedFrame.rect.x;
+        const ly = worldPos.y - selectedFrame.rect.y;
+        const brushSize = state.get('brushSize') || 10;
+
+        overlapIsolator.applyEraser(
+          selectedFrame,
+          lx,
+          ly,
+          brushSize,
+          this.lastEraserLocalPos.x,
+          this.lastEraserLocalPos.y
+        );
+        this.lastEraserLocalPos = { x: lx, y: ly };
+        this.requestRender();
+      }
+      return;
+    }
+
+    // 6. 悬停状态：更新光标样式与底部坐标
     this.updateHoverState(screenPos, worldPos);
+
+    // 若当前为橡皮擦或套索模式，请求重绘以刷新光圈/参考线
+    const curTool = state.get('currentTool');
+    if (curTool === 'eraser' || (curTool === 'lasso' && this.lassoPoints.length > 0)) {
+      this.requestRender();
+    }
   }
 
   handleMouseUp(e) {
@@ -511,6 +656,16 @@ export class CanvasWorkspace {
     if (this.isCreatingBox) {
       this.isCreatingBox = false;
       this.finishCreatingBox();
+      this.updateCursor();
+    }
+
+    if (this.isErasing) {
+      this.isErasing = false;
+      this.lastEraserLocalPos = null;
+      const selectedFrame = state.getSelectedFrame();
+      if (selectedFrame && this.onFrameModified) {
+        this.onFrameModified(selectedFrame.id);
+      }
       this.updateCursor();
     }
   }
@@ -688,7 +843,12 @@ export class CanvasWorkspace {
     }
 
     const currentTool = state.get('currentTool');
-    if (currentTool === 'create_box') {
+    if (currentTool === 'create_box' || currentTool === 'lasso' || currentTool === 'wand') {
+      this.canvas.style.cursor = 'crosshair';
+      return;
+    }
+
+    if (currentTool === 'eraser') {
       this.canvas.style.cursor = 'crosshair';
       return;
     }
@@ -745,7 +905,64 @@ export class CanvasWorkspace {
         return;
       }
 
-      // 2. 删除选中帧 (Delete 或 Backspace)
+      // 2. 撤销 (Ctrl+Z) 与 重做 (Ctrl+Y / Ctrl+Shift+Z)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z') && !e.shiftKey) {
+        const selectedFrame = state.getSelectedFrame();
+        if (selectedFrame && overlapIsolator.canUndo(selectedFrame)) {
+          e.preventDefault();
+          overlapIsolator.undo(selectedFrame);
+          this.requestRender();
+          if (this.onFrameModified) {
+            this.onFrameModified(selectedFrame.id);
+          }
+        }
+        return;
+      }
+
+      if (
+        ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z'))
+      ) {
+        const selectedFrame = state.getSelectedFrame();
+        if (selectedFrame && overlapIsolator.canRedo(selectedFrame)) {
+          e.preventDefault();
+          overlapIsolator.redo(selectedFrame);
+          this.requestRender();
+          if (this.onFrameModified) {
+            this.onFrameModified(selectedFrame.id);
+          }
+        }
+        return;
+      }
+
+      // 3. 套索回车 (Enter) 闭合裁切与 Esc 取消
+      if (e.key === 'Enter') {
+        const currentTool = state.get('currentTool');
+        const selectedFrame = state.getSelectedFrame();
+        if (currentTool === 'lasso' && selectedFrame && this.lassoPoints.length >= 3) {
+          e.preventDefault();
+          overlapIsolator.initFrameCanvas(selectedFrame, state.get('sourceImage'));
+          overlapIsolator.saveSnapshot(selectedFrame);
+          overlapIsolator.applyPolygonLasso(selectedFrame, this.lassoPoints, true);
+          this.lassoPoints = [];
+          this.requestRender();
+          if (this.onFrameModified) {
+            this.onFrameModified(selectedFrame.id);
+          }
+        }
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        if (this.lassoPoints.length > 0) {
+          e.preventDefault();
+          this.lassoPoints = [];
+          this.requestRender();
+        }
+        return;
+      }
+
+      // 4. 删除选中帧 (Delete 或 Backspace)
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const selectedId = state.get('selectedFrameId');
         if (selectedId) {
@@ -755,7 +972,7 @@ export class CanvasWorkspace {
         return;
       }
 
-      // 3. 方向键微调位置 (↑ ↓ ← →)
+      // 5. 方向键微调位置 (↑ ↓ ← →)
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         const selectedFrame = state.getSelectedFrame();
         if (selectedFrame) {
@@ -784,11 +1001,17 @@ export class CanvasWorkspace {
         return;
       }
 
-      // 4. 工具切换快捷键
+      // 6. 工具切换快捷键
       if (e.key === 'v' || e.key === 'V') {
         state.setCurrentTool('select');
       } else if (e.key === 'b' || e.key === 'B') {
         state.setCurrentTool('create_box');
+      } else if (e.key === 'e' || e.key === 'E') {
+        state.setCurrentTool('eraser');
+      } else if (e.key === 'l' || e.key === 'L') {
+        state.setCurrentTool('lasso');
+      } else if (e.key === 'w' || e.key === 'W') {
+        state.setCurrentTool('wand');
       } else if (e.key === '0') {
         this.fitToView();
       } else if (e.key === '1') {
@@ -843,6 +1066,14 @@ export class CanvasWorkspace {
 
       ctx.drawImage(sourceImage, 0, 0);
 
+      // 绘制已修整独立图层的棋盘格底板与修整后像素
+      const allFrames = state.get('frames') || [];
+      allFrames.forEach(frame => {
+        if (frame.maskCanvas && frame.rect) {
+          this.renderIsolatedFrameLayer(ctx, frame);
+        }
+      });
+
       // 绘制大图外轮廓边界虚线
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
       ctx.lineWidth = 1 / zoom;
@@ -871,6 +1102,117 @@ export class CanvasWorkspace {
     if (this.isCreatingBox) {
       this.renderCreatingBoxPreview();
     }
+
+    // 5. 绘制套索多边形正在编辑中的折线路径
+    if (state.get('currentTool') === 'lasso' && this.lassoPoints.length > 0 && selectedFrame) {
+      this.renderLassoPreview(selectedFrame);
+    }
+
+    // 6. 绘制橡皮擦圆形光圈光标
+    if (state.get('currentTool') === 'eraser' && this.hoverScreenPos) {
+      this.renderEraserCursorPreview();
+    }
+  }
+
+  /**
+   * 绘制已隔离图层的棋盘格透明底板与修整后像素
+   * @param {CanvasRenderingContext2D} ctx 
+   * @param {Object} frame 
+   */
+  renderIsolatedFrameLayer(ctx, frame) {
+    const { x, y, w, h } = frame.rect;
+    if (w <= 0 || h <= 0) return;
+
+    ctx.save();
+    // 绘制微型棋盘格
+    const tileSize = 6;
+    for (let py = y; py < y + h; py += tileSize) {
+      for (let px = x; px < x + w; px += tileSize) {
+        const tw = Math.min(tileSize, x + w - px);
+        const th = Math.min(tileSize, y + h - py);
+        const isDark = (Math.floor(px / tileSize) + Math.floor(py / tileSize)) % 2 === 0;
+        ctx.fillStyle = isDark ? '#23262d' : '#2b2f38';
+        ctx.fillRect(px, py, tw, th);
+      }
+    }
+
+    // 绘制当前帧修整后的 maskCanvas
+    try {
+      ctx.drawImage(frame.maskCanvas, x, y, w, h);
+    } catch (err) {}
+    ctx.restore();
+  }
+
+  /**
+   * 绘制套索折线参考线与顶点
+   * @param {Object} frame 
+   */
+  renderLassoPreview(frame) {
+    const ctx = this.ctx;
+    if (!ctx || this.lassoPoints.length === 0) return;
+
+    ctx.save();
+    ctx.strokeStyle = '#4cc9f0';
+    ctx.fillStyle = '#4cc9f0';
+    ctx.lineWidth = 1.8;
+
+    ctx.beginPath();
+    this.lassoPoints.forEach((pt, index) => {
+      const worldX = frame.rect.x + pt.x;
+      const worldY = frame.rect.y + pt.y;
+      const sp = this.worldToScreen(worldX, worldY);
+      if (index === 0) {
+        ctx.moveTo(sp.x, sp.y);
+      } else {
+        ctx.lineTo(sp.x, sp.y);
+      }
+    });
+
+    if (this.hoverScreenPos) {
+      ctx.lineTo(this.hoverScreenPos.x, this.hoverScreenPos.y);
+    }
+    ctx.stroke();
+
+    // 绘制顶点圆点
+    this.lassoPoints.forEach(pt => {
+      const worldX = frame.rect.x + pt.x;
+      const worldY = frame.rect.y + pt.y;
+      const sp = this.worldToScreen(worldX, worldY);
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    ctx.restore();
+  }
+
+  /**
+   * 绘制橡皮擦圆形光圈光标
+   */
+  renderEraserCursorPreview() {
+    const ctx = this.ctx;
+    if (!ctx || !this.hoverScreenPos) return;
+
+    const vp = state.get('viewport');
+    const brushSize = state.get('brushSize') || 10;
+    const screenRadius = Math.max(1, (brushSize * vp.zoom) / 2);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(this.hoverScreenPos.x, this.hoverScreenPos.y, screenRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(this.hoverScreenPos.x, this.hoverScreenPos.y, screenRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
   }
 
   /**
