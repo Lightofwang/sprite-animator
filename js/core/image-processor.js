@@ -425,6 +425,80 @@ export class ImageProcessor {
       a: imageData.data[offset + 3]
     };
   }
+
+  /**
+   * 判断图像指定矩形区域内是否为空白内容（全透明或全纯色背景）
+   * @param {ImageData|Object} imageData 完整大图像素数据
+   * @param {{x: number, y: number, w: number, h: number}} rect 检查矩形
+   * @param {Object} [options]
+   * @param {number} [options.tolerance=25] 颜色差异容差
+   * @param {number} [options.minForegroundRatio=0.008] 最小前景像素占比 (默认 0.8%)
+   * @returns {boolean} 是否为空白无内容
+   */
+  static isRectContentEmpty(imageData, rect, options = {}) {
+    if (!imageData || !imageData.data || !rect) return true;
+    const { x, y, w, h } = rect;
+    if (w <= 0 || h <= 0) return true;
+
+    const imgW = imageData.width;
+    const imgH = imageData.height;
+    const data = imageData.data;
+    const tolerance = options.tolerance ?? 25;
+    const minRatio = options.minForegroundRatio ?? 0.008;
+
+    const startX = Math.max(0, Math.min(imgW - 1, Math.round(x)));
+    const startY = Math.max(0, Math.min(imgH - 1, Math.round(y)));
+    const endX = Math.max(0, Math.min(imgW, Math.round(x + w)));
+    const endY = Math.max(0, Math.min(imgH, Math.round(y + h)));
+
+    const actualW = endX - startX;
+    const actualH = endY - startY;
+    const totalPixels = actualW * actualH;
+    if (totalPixels <= 0) return true;
+
+    // 采样左上角作为背景基准色
+    const bgOffset = (startY * imgW + startX) * 4;
+    const bgR = data[bgOffset];
+    const bgG = data[bgOffset + 1];
+    const bgB = data[bgOffset + 2];
+    const bgA = data[bgOffset + 3];
+
+    // 如果背景为透明
+    const isBgTransparent = bgA <= 20;
+
+    let foregroundCount = 0;
+    // 步长采样 (每 2 像素采样一个，保证性能超高，毫秒级完成)
+    const step = totalPixels > 10000 ? 2 : 1;
+    let sampledTotal = 0;
+
+    for (let py = startY; py < endY; py += step) {
+      const rowOffset = py * imgW;
+      for (let px = startX; px < endX; px += step) {
+        sampledTotal++;
+        const pOffset = (rowOffset + px) * 4;
+        const a = data[pOffset + 3];
+
+        if (isBgTransparent) {
+          if (a > 20) foregroundCount++;
+        } else {
+          // 背景为不透明纯色 (如黑底或白底)
+          if (a <= 20) {
+            foregroundCount++;
+          } else {
+            const dr = Math.abs(data[pOffset] - bgR);
+            const dg = Math.abs(data[pOffset + 1] - bgG);
+            const db = Math.abs(data[pOffset + 2] - bgB);
+            if (dr > tolerance || dg > tolerance || db > tolerance) {
+              foregroundCount++;
+            }
+          }
+        }
+      }
+    }
+
+    const ratio = foregroundCount / sampledTotal;
+    return ratio < minRatio;
+  }
 }
 
 export default ImageProcessor;

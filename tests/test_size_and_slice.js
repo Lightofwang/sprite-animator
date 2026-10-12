@@ -116,6 +116,54 @@ it('大图 400x300，切为 2行 4列，生成 8 帧且坐标完全紧密平铺�
   assert.strictEqual(frames[7].rect.y + frames[7].rect.h, 300);
 });
 
+// -----------------------------------------------------------------------------
+// 4. 空白内容检测算法测试 (isRectContentEmpty)
+// -----------------------------------------------------------------------------
+console.log('\n▶ [测试组 4] 纯色/透明空白内容检测验证:');
+
+import { ImageProcessor } from '../js/core/image-processor.js';
+
+it('全透明区域正确判定为空白 (empty = true)', () => {
+  const W = 50, H = 50;
+  const data = new Uint8ClampedArray(W * H * 4); // 全为 0
+  const isEmpty = ImageProcessor.isRectContentEmpty({ width: W, height: H, data }, { x: 0, y: 0, w: W, h: H });
+  assert.strictEqual(isEmpty, true);
+});
+
+it('全纯黑色区域正确判定为空白 (empty = true)', () => {
+  const W = 50, H = 50;
+  const data = new Uint8ClampedArray(W * H * 4);
+  for (let i = 0; i < W * H; i++) {
+    data[i * 4] = 0;
+    data[i * 4 + 1] = 0;
+    data[i * 4 + 2] = 0;
+    data[i * 4 + 3] = 255;
+  }
+  const isEmpty = ImageProcessor.isRectContentEmpty({ width: W, height: H, data }, { x: 0, y: 0, w: W, h: H });
+  assert.strictEqual(isEmpty, true);
+});
+
+it('包含明显角色前景像素的区域正确判定为非空白 (empty = false)', () => {
+  const W = 50, H = 50;
+  const data = new Uint8ClampedArray(W * H * 4);
+  // 背景纯黑
+  for (let i = 0; i < W * H; i++) {
+    data[i * 4 + 3] = 255;
+  }
+  // 中央绘制 20x20 红色武将像素
+  for (let y = 15; y < 35; y++) {
+    for (let x = 15; x < 35; x++) {
+      const idx = (y * W + x) * 4;
+      data[idx] = 220;     // R
+      data[idx + 1] = 40;  // G
+      data[idx + 2] = 40;  // B
+      data[idx + 3] = 255;
+    }
+  }
+  const isEmpty = ImageProcessor.isRectContentEmpty({ width: W, height: H, data }, { x: 0, y: 0, w: W, h: H });
+  assert.strictEqual(isEmpty, false);
+});
+
 console.log('\n======================================================');
 console.log(`📊 测试汇总: 共通过 ${passCount} 项, 失败 ${failCount} 项`);
 console.log('======================================================\n');
@@ -123,5 +171,5 @@ console.log('======================================================\n');
 if (failCount > 0) {
   process.exit(1);
 } else {
-  console.log('🎉 恭喜！新功能几何与缩放计算测试全部通过！\n');
+  console.log('🎉 恭喜！新功能几何、缩放与空白检测测试全部通过！\n');
 }

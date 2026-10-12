@@ -106,6 +106,9 @@ class SpriteAnimatorApp {
     this.btnConfirmGrid = document.getElementById('btn-confirm-grid');
     this.gridRowsInput = document.getElementById('grid-rows-input');
     this.gridColsInput = document.getElementById('grid-cols-input');
+    this.gridSliceSummary = document.getElementById('grid-slice-summary');
+    this.gridFilterEmpty = document.getElementById('grid-filter-empty');
+    this.gridPresetBtns = document.querySelectorAll('.grid-preset-btn');
 
     // 锚点与对齐控制
     this.pivotGrid = document.getElementById('pivot-grid');
@@ -1243,9 +1246,15 @@ class SpriteAnimatorApp {
     }
 
     // 关闭模态框
-    const closeModal = () => this.modalRemoveBg.classList.remove('active');
+    const closeModal = () => this.modalRemoveBg?.classList.remove('active');
     if (this.btnCloseBgModal) this.btnCloseBgModal.addEventListener('click', closeModal);
     if (this.btnCancelRemoveBg) this.btnCancelRemoveBg.addEventListener('click', closeModal);
+
+    if (this.modalRemoveBg) {
+      this.modalRemoveBg.addEventListener('click', (e) => {
+        if (e.target === this.modalRemoveBg) closeModal();
+      });
+    }
 
     // 弹窗容差滑块
     if (this.modalToleranceSlider && this.modalToleranceVal) {
@@ -1392,6 +1401,12 @@ class SpriteAnimatorApp {
     if (this.btnCloseUnifyModal) this.btnCloseUnifyModal.addEventListener('click', closeUnifyModal);
     if (this.btnCancelUnify) this.btnCancelUnify.addEventListener('click', closeUnifyModal);
 
+    if (this.modalUnifySize) {
+      this.modalUnifySize.addEventListener('click', (e) => {
+        if (e.target === this.modalUnifySize) closeUnifyModal();
+      });
+    }
+
     if (this.btnConfirmUnify) {
       this.btnConfirmUnify.addEventListener('click', () => {
         const frames = state.get('frames') || [];
@@ -1464,6 +1479,28 @@ class SpriteAnimatorApp {
    * 绑定均等网格行列切片模态框事件
    */
   bindGridSliceModal() {
+    const updateSliceSummary = () => {
+      const sourceImage = state.get('sourceImage');
+      if (!sourceImage || !this.gridSliceSummary) return;
+
+      const rawRows = parseInt(this.gridRowsInput?.value, 10);
+      const rawCols = parseInt(this.gridColsInput?.value, 10);
+      const rows = Math.min(25, Math.max(1, isNaN(rawRows) ? 1 : rawRows));
+      const cols = Math.min(25, Math.max(1, isNaN(rawCols) ? 1 : rawCols));
+
+      const cellW = Math.max(1, Math.floor(sourceImage.width / cols));
+      const cellH = Math.max(1, Math.floor(sourceImage.height / rows));
+      const total = rows * cols;
+
+      if (total > 100) {
+        this.gridSliceSummary.style.color = '#ef476f';
+        this.gridSliceSummary.textContent = `⚠ 预计生成 ${total} 帧 (超出 100 帧安全上限，请调整行/列)`;
+      } else {
+        this.gridSliceSummary.style.color = 'var(--accent-blue)';
+        this.gridSliceSummary.textContent = `预计生成: ${total} 帧 | 单帧尺寸: ${cellW} × ${cellH} px`;
+      }
+    };
+
     if (this.btnGridSlice) {
       this.btnGridSlice.addEventListener('click', () => {
         const sourceImage = state.get('sourceImage');
@@ -1471,7 +1508,31 @@ class SpriteAnimatorApp {
           this.setStatus('请先导入精灵大图');
           return;
         }
+        updateSliceSummary();
         if (this.modalGridSlice) this.modalGridSlice.classList.add('active');
+      });
+    }
+
+    // 监听行数与列数实时输入变化
+    if (this.gridRowsInput) {
+      this.gridRowsInput.addEventListener('input', updateSliceSummary);
+      this.gridRowsInput.addEventListener('change', updateSliceSummary);
+    }
+    if (this.gridColsInput) {
+      this.gridColsInput.addEventListener('input', updateSliceSummary);
+      this.gridColsInput.addEventListener('change', updateSliceSummary);
+    }
+
+    // 绑定快捷预设按钮点击
+    if (this.gridPresetBtns) {
+      this.gridPresetBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const r = btn.dataset.rows;
+          const c = btn.dataset.cols;
+          if (r && this.gridRowsInput) this.gridRowsInput.value = r;
+          if (c && this.gridColsInput) this.gridColsInput.value = c;
+          updateSliceSummary();
+        });
       });
     }
 
@@ -1482,27 +1543,72 @@ class SpriteAnimatorApp {
     if (this.btnCloseGridModal) this.btnCloseGridModal.addEventListener('click', closeGridModal);
     if (this.btnCancelGrid) this.btnCancelGrid.addEventListener('click', closeGridModal);
 
+    // 点击遮罩外部也能平滑关闭
+    if (this.modalGridSlice) {
+      this.modalGridSlice.addEventListener('click', (e) => {
+        if (e.target === this.modalGridSlice) closeGridModal();
+      });
+    }
+
     if (this.btnConfirmGrid) {
       this.btnConfirmGrid.addEventListener('click', () => {
         const sourceImage = state.get('sourceImage');
         if (!sourceImage) return;
 
-        const rows = Math.max(1, parseInt(this.gridRowsInput?.value, 10) || 1);
-        const cols = Math.max(1, parseInt(this.gridColsInput?.value, 10) || 1);
+        let rows = parseInt(this.gridRowsInput?.value, 10);
+        let cols = parseInt(this.gridColsInput?.value, 10);
+        if (isNaN(rows) || rows < 1) rows = 1;
+        if (isNaN(cols) || cols < 1) cols = 1;
+
+        // 严格安全上限防呆（单边最大 25，总数最大 100 帧，彻底杜绝输入大数字卡死）
+        rows = Math.min(25, rows);
+        cols = Math.min(25, cols);
+        if (rows * cols > 100) {
+          this.setStatus('单次切片总帧数不能超过 100 帧，请调小行数或列数');
+          return;
+        }
 
         const imgW = sourceImage.width;
         const imgH = sourceImage.height;
-        const cellW = Math.floor(imgW / cols);
-        const cellH = Math.floor(imgH / rows);
+        const cellW = Math.max(4, Math.floor(imgW / cols));
+        const cellH = Math.max(4, Math.floor(imgH / rows));
+
+        const filterEmpty = this.gridFilterEmpty ? this.gridFilterEmpty.checked : true;
+        let imageData = null;
+        if (filterEmpty) {
+          try {
+            imageData = ImageProcessor.getImageDataFromImage(sourceImage);
+          } catch (e) {
+            console.warn('提取整图 ImageData 进行空白过滤失败，降级为不过滤:', e);
+          }
+        }
+
+        this.setStatus('正在执行均等网格切片与有效帧校验...');
 
         const newFrames = [];
         let count = 1;
+        let filteredCount = 0;
+
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
+            const rect = { x: c * cellW, y: r * cellH, w: cellW, h: cellH };
+
+            // 若开启过滤且判定为空白帧，则剔除
+            if (filterEmpty && imageData) {
+              const isEmpty = ImageProcessor.isRectContentEmpty(imageData, rect, {
+                tolerance: 20,
+                minForegroundRatio: 0.005 // 0.5% 阈值
+              });
+              if (isEmpty) {
+                filteredCount++;
+                continue;
+              }
+            }
+
             newFrames.push({
               id: 'frame_' + Date.now() + '_' + count,
               name: `帧 ${count}`,
-              rect: { x: c * cellW, y: r * cellH, w: cellW, h: cellH },
+              rect,
               offset: { x: 0, y: 0 },
               pivot: { x: 0.5, y: 1.0 }, // 默认脚底中心对齐
               maskCanvas: null
@@ -1511,12 +1617,19 @@ class SpriteAnimatorApp {
           }
         }
 
+        if (newFrames.length === 0) {
+          this.setStatus('未检测到有效动作内容帧，已取消切片');
+          closeGridModal();
+          return;
+        }
+
+        // 批量更新状态（只触发一次视图订阅）
         state.setState({ frames: newFrames, selectedFrameId: newFrames[0]?.id || null });
         closeGridModal();
         this.renderMainCanvas();
-        this.renderFrameList();
-        this.renderPlayerViewport();
-        this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧 (${cols}列 × ${rows}行，单帧 ${cellW} × ${cellH} px)`);
+
+        const filterMsg = filteredCount > 0 ? ` (已智能剔除 ${filteredCount} 帧空白背景)` : '';
+        this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧${filterMsg}，单帧规格 ${cellW} × ${cellH} px`);
       });
     }
   }

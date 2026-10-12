@@ -1346,9 +1346,9 @@ body {
 
   <!-- 均等网格切片模态框 -->
   <div class="modal-overlay" id="modal-grid-slice">
-    <div class="modal-box" style="width: 400px;">
+    <div class="modal-box" style="width: 440px;">
       <div class="modal-header">
-        <span>均等网格自动切片 (Grid Slicer)</span>
+        <span>⊞ 均等网格自动切片 (Grid Slicer)</span>
         <button class="btn btn-icon btn-secondary" id="btn-close-grid-modal">✕</button>
       </div>
       <div class="modal-body">
@@ -1357,18 +1357,39 @@ body {
         </div>
         <div style="display: flex; gap: 16px; align-items: center;">
           <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
-            <label style="width: 40px;">行数:</label>
-            <input type="number" id="grid-rows-input" min="1" max="50" value="3" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <label style="width: 40px; font-weight: 500;">行数:</label>
+            <input type="number" id="grid-rows-input" min="1" max="25" value="3" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
             <span style="color: var(--text-sub); font-size: 12px;">行</span>
           </div>
           <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
-            <label style="width: 40px;">列数:</label>
-            <input type="number" id="grid-cols-input" min="1" max="50" value="4" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <label style="width: 40px; font-weight: 500;">列数:</label>
+            <input type="number" id="grid-cols-input" min="1" max="25" value="4" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
             <span style="color: var(--text-sub); font-size: 12px;">列</span>
           </div>
         </div>
-        <div style="font-size: 12px; color: var(--accent-yellow); background: rgba(255, 209, 102, 0.1); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 209, 102, 0.2);">
-          💡 提示：生成网格将覆盖当前全部选框。每个单元格尺寸将自动均等计算。
+
+        <!-- 常用快捷预设按钮组 -->
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+          <span style="font-size: 11px; color: var(--text-sub);">快捷预设:</span>
+          <button class="btn btn-secondary btn-sm grid-preset-btn" data-rows="3" data-cols="4" type="button">3行 × 4列 (12帧)</button>
+          <button class="btn btn-secondary btn-sm grid-preset-btn" data-rows="2" data-cols="5" type="button">2行 × 5列 (10帧)</button>
+          <button class="btn btn-secondary btn-sm grid-preset-btn" data-rows="1" data-cols="8" type="button">1行 × 8列 (8帧)</button>
+          <button class="btn btn-secondary btn-sm grid-preset-btn" data-rows="4" data-cols="4" type="button">4行 × 4列 (16帧)</button>
+        </div>
+
+        <!-- 动态规格预估信息条 -->
+        <div id="grid-slice-summary" style="font-size: 12px; color: var(--accent-blue); background: rgba(58, 134, 255, 0.1); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(58, 134, 255, 0.2); font-weight: 500;">
+          预计生成: 12 帧 | 单帧尺寸: 256 × 190 px
+        </div>
+
+        <!-- 智能过滤纯色空白帧开关 -->
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: var(--text-main);">
+          <input type="checkbox" id="grid-filter-empty" checked style="accent-color: var(--accent-blue);">
+          <span>智能过滤末尾无内容空白帧 (自动剔除全黑/全透明无人物方块)</span>
+        </label>
+
+        <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+          💡 提示：单次切片上限为 100 帧；生成网格后可在右侧点击「📐 统一全部尺寸」或手动微调。
         </div>
       </div>
       <div class="modal-footer">
@@ -2836,6 +2857,80 @@ class ImageProcessor {
       b: imageData.data[offset + 2],
       a: imageData.data[offset + 3]
     };
+  }
+
+  /**
+   * 判断图像指定矩形区域内是否为空白内容（全透明或全纯色背景）
+   * @param {ImageData|Object} imageData 完整大图像素数据
+   * @param {{x: number, y: number, w: number, h: number}} rect 检查矩形
+   * @param {Object} [options]
+   * @param {number} [options.tolerance=25] 颜色差异容差
+   * @param {number} [options.minForegroundRatio=0.008] 最小前景像素占比 (默认 0.8%)
+   * @returns {boolean} 是否为空白无内容
+   */
+  static isRectContentEmpty(imageData, rect, options = {}) {
+    if (!imageData || !imageData.data || !rect) return true;
+    const { x, y, w, h } = rect;
+    if (w <= 0 || h <= 0) return true;
+
+    const imgW = imageData.width;
+    const imgH = imageData.height;
+    const data = imageData.data;
+    const tolerance = options.tolerance ?? 25;
+    const minRatio = options.minForegroundRatio ?? 0.008;
+
+    const startX = Math.max(0, Math.min(imgW - 1, Math.round(x)));
+    const startY = Math.max(0, Math.min(imgH - 1, Math.round(y)));
+    const endX = Math.max(0, Math.min(imgW, Math.round(x + w)));
+    const endY = Math.max(0, Math.min(imgH, Math.round(y + h)));
+
+    const actualW = endX - startX;
+    const actualH = endY - startY;
+    const totalPixels = actualW * actualH;
+    if (totalPixels <= 0) return true;
+
+    // 采样左上角作为背景基准色
+    const bgOffset = (startY * imgW + startX) * 4;
+    const bgR = data[bgOffset];
+    const bgG = data[bgOffset + 1];
+    const bgB = data[bgOffset + 2];
+    const bgA = data[bgOffset + 3];
+
+    // 如果背景为透明
+    const isBgTransparent = bgA <= 20;
+
+    let foregroundCount = 0;
+    // 步长采样 (每 2 像素采样一个，保证性能超高，毫秒级完成)
+    const step = totalPixels > 10000 ? 2 : 1;
+    let sampledTotal = 0;
+
+    for (let py = startY; py < endY; py += step) {
+      const rowOffset = py * imgW;
+      for (let px = startX; px < endX; px += step) {
+        sampledTotal++;
+        const pOffset = (rowOffset + px) * 4;
+        const a = data[pOffset + 3];
+
+        if (isBgTransparent) {
+          if (a > 20) foregroundCount++;
+        } else {
+          // 背景为不透明纯色 (如黑底或白底)
+          if (a <= 20) {
+            foregroundCount++;
+          } else {
+            const dr = Math.abs(data[pOffset] - bgR);
+            const dg = Math.abs(data[pOffset + 1] - bgG);
+            const db = Math.abs(data[pOffset + 2] - bgB);
+            if (dr > tolerance || dg > tolerance || db > tolerance) {
+              foregroundCount++;
+            }
+          }
+        }
+      }
+    }
+
+    const ratio = foregroundCount / sampledTotal;
+    return ratio < minRatio;
   }
 }
 
@@ -6767,6 +6862,9 @@ class SpriteAnimatorApp {
     this.btnConfirmGrid = document.getElementById('btn-confirm-grid');
     this.gridRowsInput = document.getElementById('grid-rows-input');
     this.gridColsInput = document.getElementById('grid-cols-input');
+    this.gridSliceSummary = document.getElementById('grid-slice-summary');
+    this.gridFilterEmpty = document.getElementById('grid-filter-empty');
+    this.gridPresetBtns = document.querySelectorAll('.grid-preset-btn');
 
     // 锚点与对齐控制
     this.pivotGrid = document.getElementById('pivot-grid');
@@ -7904,9 +8002,15 @@ class SpriteAnimatorApp {
     }
 
     // 关闭模态框
-    const closeModal = () => this.modalRemoveBg.classList.remove('active');
+    const closeModal = () => this.modalRemoveBg?.classList.remove('active');
     if (this.btnCloseBgModal) this.btnCloseBgModal.addEventListener('click', closeModal);
     if (this.btnCancelRemoveBg) this.btnCancelRemoveBg.addEventListener('click', closeModal);
+
+    if (this.modalRemoveBg) {
+      this.modalRemoveBg.addEventListener('click', (e) => {
+        if (e.target === this.modalRemoveBg) closeModal();
+      });
+    }
 
     // 弹窗容差滑块
     if (this.modalToleranceSlider && this.modalToleranceVal) {
@@ -8053,6 +8157,12 @@ class SpriteAnimatorApp {
     if (this.btnCloseUnifyModal) this.btnCloseUnifyModal.addEventListener('click', closeUnifyModal);
     if (this.btnCancelUnify) this.btnCancelUnify.addEventListener('click', closeUnifyModal);
 
+    if (this.modalUnifySize) {
+      this.modalUnifySize.addEventListener('click', (e) => {
+        if (e.target === this.modalUnifySize) closeUnifyModal();
+      });
+    }
+
     if (this.btnConfirmUnify) {
       this.btnConfirmUnify.addEventListener('click', () => {
         const frames = state.get('frames') || [];
@@ -8125,6 +8235,28 @@ class SpriteAnimatorApp {
    * 绑定均等网格行列切片模态框事件
    */
   bindGridSliceModal() {
+    const updateSliceSummary = () => {
+      const sourceImage = state.get('sourceImage');
+      if (!sourceImage || !this.gridSliceSummary) return;
+
+      const rawRows = parseInt(this.gridRowsInput?.value, 10);
+      const rawCols = parseInt(this.gridColsInput?.value, 10);
+      const rows = Math.min(25, Math.max(1, isNaN(rawRows) ? 1 : rawRows));
+      const cols = Math.min(25, Math.max(1, isNaN(rawCols) ? 1 : rawCols));
+
+      const cellW = Math.max(1, Math.floor(sourceImage.width / cols));
+      const cellH = Math.max(1, Math.floor(sourceImage.height / rows));
+      const total = rows * cols;
+
+      if (total > 100) {
+        this.gridSliceSummary.style.color = '#ef476f';
+        this.gridSliceSummary.textContent = `⚠ 预计生成 ${total} 帧 (超出 100 帧安全上限，请调整行/列)`;
+      } else {
+        this.gridSliceSummary.style.color = 'var(--accent-blue)';
+        this.gridSliceSummary.textContent = `预计生成: ${total} 帧 | 单帧尺寸: ${cellW} × ${cellH} px`;
+      }
+    };
+
     if (this.btnGridSlice) {
       this.btnGridSlice.addEventListener('click', () => {
         const sourceImage = state.get('sourceImage');
@@ -8132,7 +8264,31 @@ class SpriteAnimatorApp {
           this.setStatus('请先导入精灵大图');
           return;
         }
+        updateSliceSummary();
         if (this.modalGridSlice) this.modalGridSlice.classList.add('active');
+      });
+    }
+
+    // 监听行数与列数实时输入变化
+    if (this.gridRowsInput) {
+      this.gridRowsInput.addEventListener('input', updateSliceSummary);
+      this.gridRowsInput.addEventListener('change', updateSliceSummary);
+    }
+    if (this.gridColsInput) {
+      this.gridColsInput.addEventListener('input', updateSliceSummary);
+      this.gridColsInput.addEventListener('change', updateSliceSummary);
+    }
+
+    // 绑定快捷预设按钮点击
+    if (this.gridPresetBtns) {
+      this.gridPresetBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const r = btn.dataset.rows;
+          const c = btn.dataset.cols;
+          if (r && this.gridRowsInput) this.gridRowsInput.value = r;
+          if (c && this.gridColsInput) this.gridColsInput.value = c;
+          updateSliceSummary();
+        });
       });
     }
 
@@ -8143,27 +8299,72 @@ class SpriteAnimatorApp {
     if (this.btnCloseGridModal) this.btnCloseGridModal.addEventListener('click', closeGridModal);
     if (this.btnCancelGrid) this.btnCancelGrid.addEventListener('click', closeGridModal);
 
+    // 点击遮罩外部也能平滑关闭
+    if (this.modalGridSlice) {
+      this.modalGridSlice.addEventListener('click', (e) => {
+        if (e.target === this.modalGridSlice) closeGridModal();
+      });
+    }
+
     if (this.btnConfirmGrid) {
       this.btnConfirmGrid.addEventListener('click', () => {
         const sourceImage = state.get('sourceImage');
         if (!sourceImage) return;
 
-        const rows = Math.max(1, parseInt(this.gridRowsInput?.value, 10) || 1);
-        const cols = Math.max(1, parseInt(this.gridColsInput?.value, 10) || 1);
+        let rows = parseInt(this.gridRowsInput?.value, 10);
+        let cols = parseInt(this.gridColsInput?.value, 10);
+        if (isNaN(rows) || rows < 1) rows = 1;
+        if (isNaN(cols) || cols < 1) cols = 1;
+
+        // 严格安全上限防呆（单边最大 25，总数最大 100 帧，彻底杜绝输入大数字卡死）
+        rows = Math.min(25, rows);
+        cols = Math.min(25, cols);
+        if (rows * cols > 100) {
+          this.setStatus('单次切片总帧数不能超过 100 帧，请调小行数或列数');
+          return;
+        }
 
         const imgW = sourceImage.width;
         const imgH = sourceImage.height;
-        const cellW = Math.floor(imgW / cols);
-        const cellH = Math.floor(imgH / rows);
+        const cellW = Math.max(4, Math.floor(imgW / cols));
+        const cellH = Math.max(4, Math.floor(imgH / rows));
+
+        const filterEmpty = this.gridFilterEmpty ? this.gridFilterEmpty.checked : true;
+        let imageData = null;
+        if (filterEmpty) {
+          try {
+            imageData = ImageProcessor.getImageDataFromImage(sourceImage);
+          } catch (e) {
+            console.warn('提取整图 ImageData 进行空白过滤失败，降级为不过滤:', e);
+          }
+        }
+
+        this.setStatus('正在执行均等网格切片与有效帧校验...');
 
         const newFrames = [];
         let count = 1;
+        let filteredCount = 0;
+
         for (let r = 0; r < rows; r++) {
           for (let c = 0; c < cols; c++) {
+            const rect = { x: c * cellW, y: r * cellH, w: cellW, h: cellH };
+
+            // 若开启过滤且判定为空白帧，则剔除
+            if (filterEmpty && imageData) {
+              const isEmpty = ImageProcessor.isRectContentEmpty(imageData, rect, {
+                tolerance: 20,
+                minForegroundRatio: 0.005 // 0.5% 阈值
+              });
+              if (isEmpty) {
+                filteredCount++;
+                continue;
+              }
+            }
+
             newFrames.push({
               id: 'frame_' + Date.now() + '_' + count,
               name: `帧 ${count}`,
-              rect: { x: c * cellW, y: r * cellH, w: cellW, h: cellH },
+              rect,
               offset: { x: 0, y: 0 },
               pivot: { x: 0.5, y: 1.0 }, // 默认脚底中心对齐
               maskCanvas: null
@@ -8172,12 +8373,19 @@ class SpriteAnimatorApp {
           }
         }
 
+        if (newFrames.length === 0) {
+          this.setStatus('未检测到有效动作内容帧，已取消切片');
+          closeGridModal();
+          return;
+        }
+
+        // 批量更新状态（只触发一次视图订阅）
         state.setState({ frames: newFrames, selectedFrameId: newFrames[0]?.id || null });
         closeGridModal();
         this.renderMainCanvas();
-        this.renderFrameList();
-        this.renderPlayerViewport();
-        this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧 (${cols}列 × ${rows}行，单帧 ${cellW} × ${cellH} px)`);
+
+        const filterMsg = filteredCount > 0 ? ` (已智能剔除 ${filteredCount} 帧空白背景)` : '';
+        this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧${filterMsg}，单帧规格 ${cellW} × ${cellH} px`);
       });
     }
   }

@@ -425,9 +425,9 @@
 
   <!-- 均等网格切片模态框 -->
   <div class="modal-overlay" id="modal-grid-slice">
-    <div class="modal-box" style="width: 400px;">
+    <div class="modal-box" style="width: 440px;">
       <div class="modal-header">
-        <span>均等网格自动切片 (Grid Slicer)</span>
+        <span>⊞ 均等网格自动切片 (Grid Slicer)</span>
         <button class="btn btn-icon btn-secondary" id="btn-close-grid-modal">✕</button>
       </div>
       <div class="modal-body">
@@ -436,18 +436,39 @@
         </div>
         <div style="display: flex; gap: 16px; align-items: center;">
           <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
-            <label style="width: 40px;">行数:</label>
-            <input type="number" id="grid-rows-input" min="1" max="50" value="3" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <label style="width: 40px; font-weight: 500;">行数:</label>
+            <input type="number" id="grid-rows-input" min="1" max="25" value="3" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
             <span style="color: var(--text-sub); font-size: 12px;">行</span>
           </div>
           <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
-            <label style="width: 40px;">列数:</label>
-            <input type="number" id="grid-cols-input" min="1" max="50" value="4" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+            <label style="width: 40px; font-weight: 500;">列数:</label>
+            <input type="number" id="grid-cols-input" min="1" max="25" value="4" style="width: 60px; padding: 4px 6px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
             <span style="color: var(--text-sub); font-size: 12px;">列</span>
           </div>
         </div>
-        <div style="font-size: 12px; color: var(--accent-yellow); background: rgba(255, 209, 102, 0.1); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 209, 102, 0.2);">
-          💡 提示：生成网格将覆盖当前全部选框。每个单元格尺寸将自动均等计算。
+
+        <!-- 常用快捷预设按钮组 -->
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+          <span style="font-size: 11px; color: var(--text-sub);">快捷预设:</span>
+          <button class="btn btn-secondary btn-sm grid-preset-btn" data-rows="3" data-cols="4" type="button">3行 × 4列 (12帧)</button>
+          <button class="btn btn-secondary btn-sm grid-preset-btn" data-rows="2" data-cols="5" type="button">2行 × 5列 (10帧)</button>
+          <button class="btn btn-secondary btn-sm grid-preset-btn" data-rows="1" data-cols="8" type="button">1行 × 8列 (8帧)</button>
+          <button class="btn btn-secondary btn-sm grid-preset-btn" data-rows="4" data-cols="4" type="button">4行 × 4列 (16帧)</button>
+        </div>
+
+        <!-- 动态规格预估信息条 -->
+        <div id="grid-slice-summary" style="font-size: 12px; color: var(--accent-blue); background: rgba(58, 134, 255, 0.1); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(58, 134, 255, 0.2); font-weight: 500;">
+          预计生成: 12 帧 | 单帧尺寸: 256 × 190 px
+        </div>
+
+        <!-- 智能过滤纯色空白帧开关 -->
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: var(--text-main);">
+          <input type="checkbox" id="grid-filter-empty" checked style="accent-color: var(--accent-blue);">
+          <span>智能过滤末尾无内容空白帧 (自动剔除全黑/全透明无人物方块)</span>
+        </label>
+
+        <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
+          💡 提示：单次切片上限为 100 帧；生成网格后可在右侧点击「📐 统一全部尺寸」或手动微调。
         </div>
       </div>
       <div class="modal-footer">
