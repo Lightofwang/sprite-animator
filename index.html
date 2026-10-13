@@ -513,8 +513,8 @@
   </div>
 
   <!-- GIF 动图拆分模态框 (GIF Splitter Modal) -->
-  <div class="modal-backdrop" id="modal-gif-split">
-    <div class="modal-dialog" style="max-width: 480px;">
+  <div class="modal-overlay" id="modal-gif-split">
+    <div class="modal-box" style="width: 480px;">
       <div class="modal-header">
         <span>🎞️ GIF 动图拆分完成</span>
         <button class="btn btn-icon btn-secondary" id="btn-close-gif-modal">✕</button>
@@ -533,13 +533,13 @@
         </div>
 
         <div style="font-size: 12px; color: var(--text-sub); line-height: 1.5; margin-top: 4px;">
-          请选择后续处理方式：
+          🎉 各动作序列帧已提取完毕，并已自动排版载入工作台播放！您可以直接进入工作台编辑，或一键打包下载：
         </div>
       </div>
       <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button class="btn btn-secondary" id="btn-cancel-gif">取消</button>
+        <button class="btn btn-secondary" id="btn-cancel-gif">关闭</button>
         <button class="btn btn-secondary" id="btn-gif-download-zip" title="直接将这组透明单帧 PNG 压缩打包下载到本地">📦 下载序列帧包 (.zip)</button>
-        <button class="btn btn-primary" id="btn-gif-to-workspace" title="自动排版为整齐精灵表大图载入工作台，创建各帧选框并立即开播">🚀 载入工作台编辑</button>
+        <button class="btn btn-primary" id="btn-gif-to-workspace" title="关闭弹窗，直接在工作台进行帧选取、位移对齐与实时编辑">🚀 进入工作台编辑</button>
       </div>
     </div>
   </div>

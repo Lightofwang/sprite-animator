@@ -1437,7 +1437,7 @@ class SpriteAnimatorApp {
   }
 
   /**
-   * 处理 GIF 动图文件：调用 GifDecoder 解析各帧并打开拆分确认模态框
+   * 处理 GIF 动图文件：调用 GifDecoder 解析各帧并自动载入工作台开播
    * @param {File} file 
    */
   async handleGifFile(file) {
@@ -1447,16 +1447,19 @@ class SpriteAnimatorApp {
       this.setStatus(`正在解析并拆分 GIF 动图: ${file.name}...`);
       this.showToast(`正在无损拆解 GIF 动图: ${file.name}...`, 'info');
 
-      // 调用双引擎 GIF 解码核心
+      // 1. 调用双引擎 GIF 解码核心
       const decodedGif = await GifDecoder.decode(file);
 
       this.currentDecodedGif = decodedGif;
       this.currentGifFile = file;
 
-      // 打开 GIF 拆分确认模态框并展示动图属性
+      // 2. 直接自动生成规整精灵大图并载入工作台开播！
+      await this.loadGifToWorkspace(decodedGif, file.name);
+
+      // 3. 同时唤起弹窗呈现拆解详情（尺寸、帧数、帧率）与一键下载 ZIP 包操作
       this.openGifSplitModal(decodedGif, file.name);
 
-      this.setStatus(`GIF 动图解析成功: 共拆解出 ${decodedGif.frameCount} 个动作序列帧 (${decodedGif.width} × ${decodedGif.height} px, ${decodedGif.avgFps} FPS)`);
+      this.setStatus(`GIF 动图拆解成功: 共提取 ${decodedGif.frameCount} 个动作序列帧 (${decodedGif.width} × ${decodedGif.height} px, ${decodedGif.avgFps} FPS) 并已开播！`);
     } catch (err) {
       console.error('[SpriteAnimator] 解析 GIF 动图失败:', err);
       this.setStatus(`解析 GIF 失败: ${err.message}`);
@@ -1540,71 +1543,97 @@ class SpriteAnimatorApp {
   async loadGifToWorkspace(decodedGif, filename = 'animation.gif') {
     if (!decodedGif) return;
 
-    try {
-      this.setStatus('正在自动生成规整精灵表并载入工作台...');
+    return new Promise((resolve) => {
+      try {
+        this.setStatus('正在自动生成规整精灵表并载入工作台...');
 
-      // 1. 规整网格排版大图与选框元数据
-      const assembled = GifDecoder.assembleSpriteSheet(decodedGif, {
-        padding: 8,
-        namePrefix: '帧'
-      });
-
-      // 2. 将离屏 Canvas 转为 Image 对象作为 sourceImage
-      const sheetImg = new Image();
-      sheetImg.onload = () => {
-        // 更新全局状态：载入大图、帧列表、同步帧率
-        const fps = Math.min(60, Math.max(1, Math.round(decodedGif.avgFps || 12)));
-
-        state.setState({
-          sourceImage: sheetImg,
-          imageMetadata: {
-            name: `${filename.replace(/\.[^/.]+$/, '')}_sheet.png`,
-            width: sheetImg.naturalWidth,
-            height: sheetImg.naturalHeight,
-            naturalWidth: sheetImg.naturalWidth,
-            naturalHeight: sheetImg.naturalHeight
-          },
-          frames: assembled.frames,
-          selectedFrameId: assembled.frames[0]?.id || null,
-          playerState: {
-            ...state.get('playerState'),
-            fps,
-            isPlaying: true // 自动开播
-          }
+        // 1. 规整网格排版大图与选框元数据
+        const assembled = GifDecoder.assembleSpriteSheet(decodedGif, {
+          padding: 8,
+          namePrefix: '帧'
         });
 
-        // 更新顶部 Badges
-        if (this.imageNameBadge) this.imageNameBadge.textContent = `${filename} (GIF拆分)`;
-        if (this.imageDimBadge) this.imageDimBadge.textContent = `${sheetImg.naturalWidth} × ${sheetImg.naturalHeight} px`;
-
-        if (this.fpsSlider) this.fpsSlider.value = fps;
-        if (this.fpsDisplay) this.fpsDisplay.textContent = `${fps} FPS`;
-
-        // 重新自适应视口居中
-        if (this.canvasWorkspace) {
-          this.canvasWorkspace.fitToView();
+        // 2. 将离屏 Canvas 转为 Image 对象作为 sourceImage
+        const sheetCanvas = assembled.sheetCanvas;
+        let imgSrc = '';
+        if (sheetCanvas && typeof sheetCanvas.toDataURL === 'function') {
+          imgSrc = sheetCanvas.toDataURL('image/png');
         }
 
-        // 启动播放器
-        if (this.player) {
-          this.player.setFPS(fps);
-          this.player.setFrames(assembled.frames);
-          this.player.play();
-        }
+        const sheetImg = new Image();
+        sheetImg.onload = () => {
+          // 隐藏空状态大图标
+          if (this.emptyPlaceholder) {
+            this.emptyPlaceholder.style.display = 'none';
+          }
 
-        this.renderFrameList();
-        this.renderPlayerViewport();
+          // 更新全局状态：载入大图、帧列表、同步帧率
+          const fps = Math.min(60, Math.max(1, Math.round(decodedGif.avgFps || 12)));
 
-        this.closeGifSplitModal();
-        this.setStatus(`成功拆分并载入 ${assembled.frames.length} 个动作序列帧，已自动同步帧率 (${fps} FPS) 并开始播放！`);
-        this.showToast(`🎉 成功拆解 ${assembled.frames.length} 帧并载入工作台，正在流畅播放！`, 'success');
-      };
+          state.setState({
+            sourceImage: sheetImg,
+            imageMetadata: {
+              name: `${filename.replace(/\.[^/.]+$/, '')}_sheet.png`,
+              width: sheetImg.naturalWidth,
+              height: sheetImg.naturalHeight,
+              naturalWidth: sheetImg.naturalWidth,
+              naturalHeight: sheetImg.naturalHeight
+            },
+            frames: assembled.frames,
+            selectedFrameId: assembled.frames[0]?.id || null,
+            playerState: {
+              ...state.get('playerState'),
+              fps,
+              isPlaying: true // 自动开播
+            }
+          });
 
-      sheetImg.src = assembled.sheetCanvas.toDataURL('image/png');
-    } catch (err) {
-      console.error('[SpriteAnimator] 载入 GIF 到工作台失败:', err);
-      this.setStatus(`载入工作台失败: ${err.message}`);
-    }
+          // 更新顶部 Badges
+          if (this.imageNameBadge) this.imageNameBadge.textContent = `${filename} (${decodedGif.frameCount}帧)`;
+          if (this.imageDimBadge) this.imageDimBadge.textContent = `${sheetImg.naturalWidth} × ${sheetImg.naturalHeight} px`;
+
+          if (this.fpsSlider) this.fpsSlider.value = fps;
+          if (this.fpsDisplay) this.fpsDisplay.textContent = `${fps} FPS`;
+
+          // 重新自适应视口居中
+          if (this.canvasWorkspace) {
+            this.canvasWorkspace.fitToView();
+          }
+
+          // 启动播放器
+          if (this.player) {
+            this.player.setSourceImage(sheetImg);
+            this.player.setFPS(fps);
+            this.player.setFrames(assembled.frames);
+            this.player.play();
+          }
+
+          this.renderFrameList();
+          this.renderPlayerViewport();
+          this.renderMainCanvas();
+
+          const successMsg = `🎉 成功拆解 GIF（共 ${assembled.frames.length} 帧，${fps} FPS），已自动规整排版并载入播放！`;
+          this.setStatus(successMsg);
+          this.showToast(`🎉 成功拆解 ${assembled.frames.length} 帧并载入播放！`, 'success', {
+            label: '📦 导出序列帧包 (.zip)',
+            onClick: () => this.downloadGifFramesZip(decodedGif, filename)
+          });
+          resolve(true);
+        };
+
+        sheetImg.onerror = (e) => {
+          console.error('[SpriteAnimator] 大图生成失败:', e);
+          this.setStatus('加载拆解精灵大图失败');
+          resolve(false);
+        };
+
+        sheetImg.src = imgSrc;
+      } catch (err) {
+        console.error('[SpriteAnimator] 载入 GIF 到工作台失败:', err);
+        this.setStatus(`载入工作台失败: ${err.message}`);
+        resolve(false);
+      }
+    });
   }
 
   /**
@@ -1654,13 +1683,14 @@ class SpriteAnimatorApp {
       }
     });
 
-    // 点击“载入工作台编辑”
+    // 点击“载入工作台编辑 / 进入工作台”
     if (this.btnGifToWorkspace) {
       this.btnGifToWorkspace.addEventListener('click', () => {
         if (this.currentDecodedGif) {
           const fn = this.currentGifFile ? this.currentGifFile.name : 'animation.gif';
           this.loadGifToWorkspace(this.currentDecodedGif, fn);
         }
+        this.closeGifSplitModal();
       });
     }
 
