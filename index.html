@@ -15,7 +15,7 @@
         <div class="brand">
           <div class="brand-icon">⚡</div>
           <span>Sprite Animator</span>
-          <span class="badge-version">v1.7</span>
+          <span class="badge-version">v1.8</span>
         </div>
 
         <div class="toolbar-divider"></div>
@@ -249,22 +249,25 @@
             </div>
 
             <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
-              <button class="btn btn-primary btn-sm" id="btn-align-all-xy" style="flex: 1.3; padding: 3px 6px; font-size: 11px;" title="一键自动按角色躯干重心对齐X轴（排除白色刀光干扰）+ 按真实脚底对齐Y轴地面线">
-                🎯 全部XY自动对齐
+              <button class="btn btn-primary btn-sm" id="btn-align-all-left-foot" style="flex: 1.2; padding: 3px 6px; font-size: 11px;" title="一键自动识别全部帧的左脚（后脚）位置与脚底，以左脚为锚点统一对齐全部帧">
+                🦶 全部按左脚对齐
               </button>
-              <button class="btn btn-secondary btn-sm" id="btn-align-all-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="仅对齐全部帧的Y轴脚底地面线（保留现有X轴）">
-                ⏬ 全部Y贴地
-              </button>
-              <button class="btn btn-secondary btn-sm" id="btn-reset-offset" style="padding: 3px 6px; font-size: 11px;" title="将当前帧 X/Y 偏移量重置归零">
-                ↺ 归零
+              <button class="btn btn-secondary btn-sm" id="btn-align-all-xy" style="flex: 1.1; padding: 3px 6px; font-size: 11px;" title="一键按角色躯干重心对齐X轴（排除白色刀光干扰）+ 按真实脚底对齐Y轴">
+                🎯 全部按中心对齐
               </button>
             </div>
             <div class="control-row" style="margin-top: 4px; display: flex; gap: 4px;">
-              <button class="btn btn-secondary btn-sm" id="btn-align-frame-x" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="自动识别当前帧角色躯干重心（排除白色刀光）并居中对齐X轴">
-                ↔ 当前帧X居中
+              <button class="btn btn-secondary btn-sm" id="btn-align-all-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="仅对齐全部帧的Y轴脚底地面线（保留现有X轴）">
+                ⏬ 全部Y贴地
               </button>
-              <button class="btn btn-secondary btn-sm" id="btn-align-frame-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="自动扫描当前帧角色脚底最低像素，贴合到地面基准线">
-                ⏬ 当前帧Y贴地
+              <button class="btn btn-secondary btn-sm" id="btn-align-frame-x" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="将当前选中帧按左脚位置与地面自动对齐">
+                🦶 当前帧左脚
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-align-frame-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="仅将当前帧脚底贴合到地面基准线">
+                ⏬ 当前Y贴地
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-reset-offset" style="padding: 3px 6px; font-size: 11px;" title="将当前帧 X/Y 偏移量重置归零">
+                ↺ 归零
               </button>
             </div>
 

@@ -119,6 +119,7 @@ class SpriteAnimatorApp {
     this.pivotDots = document.querySelectorAll('.pivot-dot');
     this.offsetXInput = document.getElementById('offset-x');
     this.offsetYInput = document.getElementById('offset-y');
+    this.btnAlignAllLeftFoot = document.getElementById('btn-align-all-left-foot');
     this.btnAlignAllXY = document.getElementById('btn-align-all-xy');
     this.btnAlignFrameX = document.getElementById('btn-align-frame-x');
     this.btnAlignFrameGround = document.getElementById('btn-align-frame-ground');
@@ -772,10 +773,15 @@ class SpriteAnimatorApp {
       this.offsetYInput.addEventListener('change', handleOffsetChange);
     }
 
-    // 2.5 自动脚底贴地、X轴角色重心对齐与归零快捷按钮
+    // 2.5 自动左脚对齐、角色重心对齐、脚底贴地与归零快捷按钮
+    if (this.btnAlignAllLeftFoot) {
+      this.btnAlignAllLeftFoot.addEventListener('click', () => {
+        this.handleAutoAlignGround(true, { alignX: true, alignY: true, xMode: 'left-foot' });
+      });
+    }
     if (this.btnAlignAllXY) {
       this.btnAlignAllXY.addEventListener('click', () => {
-        this.handleAutoAlignGround(true, { alignX: true, alignY: true });
+        this.handleAutoAlignGround(true, { alignX: true, alignY: true, xMode: 'body-center' });
       });
     }
     if (this.btnAlignAllGround) {
@@ -785,7 +791,7 @@ class SpriteAnimatorApp {
     }
     if (this.btnAlignFrameX) {
       this.btnAlignFrameX.addEventListener('click', () => {
-        this.handleAutoAlignGround(false, { alignX: true, alignY: false });
+        this.handleAutoAlignGround(false, { alignX: true, alignY: true, xMode: 'left-foot' });
       });
     }
     if (this.btnAlignFrameGround) {
@@ -832,10 +838,10 @@ class SpriteAnimatorApp {
   }
 
   /**
-   * 自动扫描角色真实前景像素最低点（脚底）与角色躯干水平重心（排除白色刀光干扰），
-   * 自动补偿 offset.x / offset.y 使各帧角色水平重心与地面线精准对齐
+   * 自动扫描角色真实前景像素最低点（脚底）、左脚接地位置或角色躯干水平重心（排除白色刀光干扰），
+   * 自动补偿 offset.x / offset.y 使各帧角色精准对齐
    * @param {boolean} alignAll - true: 一键对齐全部动作帧; false: 仅对齐当前选中帧
-   * @param {{ alignX?: boolean, alignY?: boolean }} [opts={ alignX: false, alignY: true }]
+   * @param {{ alignX?: boolean, alignY?: boolean, xMode?: 'left-foot'|'body-center'|'right-foot' }} [opts={ alignX: false, alignY: true }]
    */
   handleAutoAlignGround(alignAll = false, opts = {}) {
     const sourceImage = state.get('sourceImage');
@@ -847,6 +853,7 @@ class SpriteAnimatorApp {
 
     const alignX = opts.alignX === true;
     const alignY = opts.alignY !== false;
+    const xMode = opts.xMode || 'body-center';
 
     const targets = alignAll ? frames : [state.getSelectedFrame()].filter(Boolean);
     if (targets.length === 0) {
@@ -889,7 +896,7 @@ class SpriteAnimatorApp {
       }
 
       if (bounds && !bounds.empty) {
-        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX, alignY });
+        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX, alignY, xMode });
         alignedCount++;
       }
     }
@@ -902,10 +909,12 @@ class SpriteAnimatorApp {
     this.renderPlayerViewport();
 
     if (alignAll) {
-      const modeDesc = (alignX && alignY) ? 'X 轴角色重心与 Y 轴脚底地面线' : 'Y 轴脚底地面线';
-      const msg = `已完成全部 ${alignedCount} 帧 ${modeDesc}自动对齐！(可在播放器中直接按住人物拖拽微调单帧)`;
+      const modeDesc = alignX
+        ? (xMode === 'left-foot' ? '左脚锚点与地面线' : '角色中心与地面线')
+        : 'Y 轴脚底地面线';
+      const msg = `已完成全部 ${alignedCount} 帧 [${modeDesc}] 自动对齐！视口已自动居中完整显示刀光`;
       this.setStatus(msg);
-      this.showToast(`全部 ${alignedCount} 帧已自动完成 ${modeDesc}对齐！`, 'success');
+      this.showToast(`全部 ${alignedCount} 帧已按 [${modeDesc}] 自动对齐，刀光完整自适应！`, 'success');
     } else if (selectedFrame) {
       this.setStatus(`已自动对齐 [${selectedFrame.name}] (X偏移 = ${selectedFrame.offset?.x || 0}px, Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
     }
@@ -1245,6 +1254,7 @@ class SpriteAnimatorApp {
       const result = await Exporter.exportNewSpriteSheet(frames, {
         sourceImage,
         padding: 16,
+        expandForOffset: true,
         filename: `${animName}_clean_sheet.png`
       });
 

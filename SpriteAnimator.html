@@ -1016,7 +1016,7 @@ body {
         <div class="brand">
           <div class="brand-icon">⚡</div>
           <span>Sprite Animator</span>
-          <span class="badge-version">v1.7</span>
+          <span class="badge-version">v1.8</span>
         </div>
 
         <div class="toolbar-divider"></div>
@@ -1250,22 +1250,25 @@ body {
             </div>
 
             <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
-              <button class="btn btn-primary btn-sm" id="btn-align-all-xy" style="flex: 1.3; padding: 3px 6px; font-size: 11px;" title="一键自动按角色躯干重心对齐X轴（排除白色刀光干扰）+ 按真实脚底对齐Y轴地面线">
-                🎯 全部XY自动对齐
+              <button class="btn btn-primary btn-sm" id="btn-align-all-left-foot" style="flex: 1.2; padding: 3px 6px; font-size: 11px;" title="一键自动识别全部帧的左脚（后脚）位置与脚底，以左脚为锚点统一对齐全部帧">
+                🦶 全部按左脚对齐
               </button>
-              <button class="btn btn-secondary btn-sm" id="btn-align-all-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="仅对齐全部帧的Y轴脚底地面线（保留现有X轴）">
-                ⏬ 全部Y贴地
-              </button>
-              <button class="btn btn-secondary btn-sm" id="btn-reset-offset" style="padding: 3px 6px; font-size: 11px;" title="将当前帧 X/Y 偏移量重置归零">
-                ↺ 归零
+              <button class="btn btn-secondary btn-sm" id="btn-align-all-xy" style="flex: 1.1; padding: 3px 6px; font-size: 11px;" title="一键按角色躯干重心对齐X轴（排除白色刀光干扰）+ 按真实脚底对齐Y轴">
+                🎯 全部按中心对齐
               </button>
             </div>
             <div class="control-row" style="margin-top: 4px; display: flex; gap: 4px;">
-              <button class="btn btn-secondary btn-sm" id="btn-align-frame-x" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="自动识别当前帧角色躯干重心（排除白色刀光）并居中对齐X轴">
-                ↔ 当前帧X居中
+              <button class="btn btn-secondary btn-sm" id="btn-align-all-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="仅对齐全部帧的Y轴脚底地面线（保留现有X轴）">
+                ⏬ 全部Y贴地
               </button>
-              <button class="btn btn-secondary btn-sm" id="btn-align-frame-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="自动扫描当前帧角色脚底最低像素，贴合到地面基准线">
-                ⏬ 当前帧Y贴地
+              <button class="btn btn-secondary btn-sm" id="btn-align-frame-x" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="将当前选中帧按左脚位置与地面自动对齐">
+                🦶 当前帧左脚
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-align-frame-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="仅将当前帧脚底贴合到地面基准线">
+                ⏬ 当前Y贴地
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-reset-offset" style="padding: 3px 6px; font-size: 11px;" title="将当前帧 X/Y 偏移量重置归零">
+                ↺ 归零
               </button>
             </div>
 
@@ -3146,6 +3149,54 @@ class ImageProcessor {
       return null;
     }
 
+    const contentW = localMaxX - localMinX + 1;
+    const contentH = localMaxY - localMinY + 1;
+
+    // 二次扫描贴近脚底的接地层 (底部 8% 高度范围，排除白色刀光)，精准定位左脚与右脚水平位置
+    const footBandH = Math.max(6, Math.min(30, Math.round(contentH * 0.08)));
+    const footStartY = startY + Math.max(localMinY, localMaxY - footBandH);
+    const footEndY = startY + localMaxY + 1;
+    let footMinX = localMaxX;
+    let footMaxX = localMinX;
+    let foundFoot = false;
+
+    for (let py = footStartY; py < footEndY; py++) {
+      const rowOffset = py * imgW;
+      for (let px = startX + localMinX; px <= startX + localMaxX; px++) {
+        const pOffset = (rowOffset + px) * 4;
+        const r = data[pOffset];
+        const g = data[pOffset + 1];
+        const b = data[pOffset + 2];
+        const a = data[pOffset + 3];
+
+        let isFg = isBgTransparent
+          ? (a > alphaThreshold)
+          : (a > alphaThreshold && (Math.abs(r - bgR) > tolerance || Math.abs(g - bgG) > tolerance || Math.abs(b - bgB) > tolerance));
+
+        if (isFg) {
+          const maxC = Math.max(r, g, b);
+          const minC = Math.min(r, g, b);
+          const isWhiteSlash = (r > 210 && g > 210 && b > 210 && (maxC - minC) < 35);
+          if (!isWhiteSlash) {
+            const lx = px - startX;
+            if (lx < footMinX) footMinX = lx;
+            if (lx > footMaxX) footMaxX = lx;
+            foundFoot = true;
+          }
+        }
+      }
+    }
+
+    if (!foundFoot) {
+      footMinX = localMinX;
+      footMaxX = localMaxX;
+    }
+
+    // 左脚掌中心点（从左脚最左边缘向右偏移约 12px 脚掌半宽）
+    const footPad = Math.min(12, Math.round((footMaxX - footMinX) * 0.15));
+    const leftFootX = footMinX + footPad;
+    const rightFootX = footMaxX - footPad;
+
     const boxCenterX = (localMinX + localMaxX + 1) / 2;
     const massCenterX = allSumX / allCount;
     // 若非白色角色本体像素占比充足 (>10%)，优先使用排除刀光后的角色本体重心
@@ -3161,11 +3212,13 @@ class ImageProcessor {
       bottomGap: actualH - 1 - localMaxY,
       leftGap: localMinX,
       rightGap: actualW - 1 - localMaxX,
-      contentW: localMaxX - localMinX + 1,
-      contentH: localMaxY - localMinY + 1,
+      contentW,
+      contentH,
       boxCenterX,
       massCenterX,
-      bodyCenterX
+      bodyCenterX,
+      leftFootX,
+      rightFootX
     };
   }
 }
@@ -4192,10 +4245,10 @@ class FrameAlignment {
   /**
    * 根据检测到的角色真实内容边界，自动计算并设置帧的 offset.y（及可选 offset.x），
    * 使角色真实最低点（脚底）精准贴合到地面基准线 targetBaseY，
-   * 使角色本体重心（排除白色刀光干扰）精准对齐水平基准中心 targetBaseX
+   * 使角色左脚 / 躯干重心 / 右脚精准对齐水平基准中心 targetBaseX
    * @param {Object} frame 帧对象
-   * @param {{ localMinX: number, localMaxX: number, localMinY: number, localMaxY: number, bodyCenterX?: number }} bounds 角色真实像素边界
-   * @param {{ alignX?: boolean, alignY?: boolean }} [options={}]
+   * @param {{ localMinX: number, localMaxX: number, localMinY: number, localMaxY: number, bodyCenterX?: number, leftFootX?: number, rightFootX?: number }} bounds 角色真实像素边界
+   * @param {{ alignX?: boolean, alignY?: boolean, xMode?: 'left-foot'|'body-center'|'right-foot' }} [options={}]
    * @returns {{ x: number, y: number }} 更新后的 offset
    */
   autoAlignFrameToGround(frame, bounds, options = {}) {
@@ -4217,11 +4270,18 @@ class FrameAlignment {
     }
 
     if (options.alignX) {
-      // 优先采用排除白色刀光特效后的角色本体水平重心 bodyCenterX
-      const contentCenterX = (typeof bounds.bodyCenterX === 'number')
-        ? bounds.bodyCenterX
-        : (bounds.localMinX + bounds.localMaxX + 1) / 2;
-      frame.offset.x = Math.round(w * px - contentCenterX);
+      const xMode = options.xMode || 'body-center';
+      let targetLocalX;
+      if (xMode === 'left-foot' && typeof bounds.leftFootX === 'number') {
+        targetLocalX = bounds.leftFootX;
+      } else if (xMode === 'right-foot' && typeof bounds.rightFootX === 'number') {
+        targetLocalX = bounds.rightFootX;
+      } else if (typeof bounds.bodyCenterX === 'number') {
+        targetLocalX = bounds.bodyCenterX;
+      } else {
+        targetLocalX = (bounds.localMinX + bounds.localMaxX + 1) / 2;
+      }
+      frame.offset.x = Math.round(w * px - targetLocalX);
     }
 
     return { ...frame.offset };
@@ -4372,7 +4432,60 @@ class FrameAlignment {
    * @param {Object} displayConfig 显示配置 { showGround, onionSkin, showPivot, onionSkinOpacity }
    */
   /**
-   * 计算视口舞台的最佳缩放比 (自适应完整展示整个人物与武器)
+   * 计算全部动作帧相对于锚点基准 (0, 0) 的联合包围盒 (Union Bounding Box)
+   * 确保当以左脚对齐或存在较大 offset 时，右侧长枪与大刀光依然 100% 纳入视口计算
+   * @param {Array<Object>} allFrames 
+   * @param {Object|null} currentFrame 
+   * @returns {{ minLeft: number, maxRight: number, minTop: number, maxBottom: number, spanW: number, spanH: number }}
+   */
+  calculateStageBounds(allFrames = [], currentFrame = null) {
+    const list = (Array.isArray(allFrames) && allFrames.length > 0)
+      ? allFrames
+      : (currentFrame ? [currentFrame] : []);
+
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    let minTop = Infinity;
+    let maxBottom = -Infinity;
+
+    list.forEach(f => {
+      if (!f || !f.rect) return;
+      const w = f.rect.w || 0;
+      const h = f.rect.h || 0;
+      if (w <= 0 || h <= 0) return;
+
+      const px = (f.pivot && typeof f.pivot.x === 'number') ? f.pivot.x : 0.5;
+      const py = (f.pivot && typeof f.pivot.y === 'number') ? f.pivot.y : 1.0;
+      const ox = (f.offset && typeof f.offset.x === 'number') ? f.offset.x : 0;
+      const oy = (f.offset && typeof f.offset.y === 'number') ? f.offset.y : 0;
+
+      const l = ox - w * px;
+      const r = ox + w * (1 - px);
+      const t = oy - h * py;
+      const b = oy + h * (1 - py);
+
+      if (l < minLeft) minLeft = l;
+      if (r > maxRight) maxRight = r;
+      if (t < minTop) minTop = t;
+      if (b > maxBottom) maxBottom = b;
+    });
+
+    if (!isFinite(minLeft) || !isFinite(maxRight)) {
+      return { minLeft: 0, maxRight: 0, minTop: 0, maxBottom: 0, spanW: 0, spanH: 0 };
+    }
+
+    return {
+      minLeft,
+      maxRight,
+      minTop,
+      maxBottom,
+      spanW: Math.max(0, maxRight - minLeft),
+      spanH: Math.max(0, maxBottom - minTop)
+    };
+  }
+
+  /**
+   * 计算视口舞台的最佳缩放比 (自适应完整展示整个人物与武器/刀光，考虑 offset 与锚点跨度)
    * @param {number} canvasWidth 
    * @param {number} canvasHeight 
    * @param {Array<Object>} allFrames 
@@ -4389,18 +4502,9 @@ class FrameAlignment {
       if (!isNaN(parsed) && parsed > 0) return parsed;
     }
 
-    // 自适应 Auto Fit 逻辑
-    let maxW = currentFrame?.rect?.w || 0;
-    let maxH = currentFrame?.rect?.h || 0;
-
-    if (Array.isArray(allFrames)) {
-      allFrames.forEach(f => {
-        if (f && f.rect) {
-          if (f.rect.w > maxW) maxW = f.rect.w;
-          if (f.rect.h > maxH) maxH = f.rect.h;
-        }
-      });
-    }
+    const bounds = this.calculateStageBounds(allFrames, currentFrame);
+    const maxW = bounds.spanW;
+    const maxH = bounds.spanH;
 
     if (maxW <= 0 || maxH <= 0) return 1.0;
 
@@ -4435,12 +4539,17 @@ class FrameAlignment {
     // 清空背景
     ctx.clearRect(0, 0, width, height);
 
-    // 计算地面与锚点基准坐标：水平居中，脚底基准线位于画布高 82% 处
-    const targetBaseX = Math.round(width / 2);
+    // 计算联合包围盒与视口缩放比
+    const stageBounds = this.calculateStageBounds(allFrames, currentFrame);
+    const scale = this.calculateStageScale(width, height, allFrames, currentFrame, displayConfig.zoom);
+
+    // 动态计算水平基准坐标 targetBaseX：
+    // 当以左脚为锚点对齐时，角色身体与右侧大刀光均在锚点右侧 (minLeft + maxRight > 0)，
+    // 自动将基准锚点向左平移，使整个动作序列 [minLeft, maxRight] 100% 居中完整呈现在播放器视口中央，绝不出框！
+    const centerOffsetX = ((stageBounds.minLeft + stageBounds.maxRight) / 2) * scale;
+    const targetBaseX = Math.round(width / 2 - centerOffsetX);
     const targetBaseY = Math.round(height * 0.82);
 
-    // 计算视口缩放比
-    const scale = this.calculateStageScale(width, height, allFrames, currentFrame, displayConfig.zoom);
     this.lastRenderScale = scale;
     this.lastTargetBaseX = targetBaseX;
     this.lastTargetBaseY = targetBaseY;
@@ -6707,15 +6816,41 @@ class Exporter {
     // 计算所有动作帧的最大宽度和最大高度作为规整单元格尺寸
     let maxW = 1;
     let maxH = 1;
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    let minTop = Infinity;
+    let maxBottom = -Infinity;
+
     for (const frame of frames) {
       if (frame.rect) {
-        if (frame.rect.w > maxW) maxW = frame.rect.w;
-        if (frame.rect.h > maxH) maxH = frame.rect.h;
+        const fw = frame.rect.w || 1;
+        const fh = frame.rect.h || 1;
+        if (fw > maxW) maxW = fw;
+        if (fh > maxH) maxH = fh;
+
+        const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
+        const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
+        const ox = (frame.offset && typeof frame.offset.x === 'number') ? frame.offset.x : 0;
+        const oy = (frame.offset && typeof frame.offset.y === 'number') ? frame.offset.y : 0;
+
+        const l = ox - fw * px;
+        const r = ox + fw * (1 - px);
+        const t = oy - fh * py;
+        const b = oy + fh * (1 - py);
+        if (l < minLeft) minLeft = l;
+        if (r > maxRight) maxRight = r;
+        if (t < minTop) minTop = t;
+        if (b > maxBottom) maxBottom = b;
       }
     }
 
-    const cellW = Math.max(1, Math.round(maxW));
-    const cellH = Math.max(1, Math.round(maxH));
+    const useUnionBounds = Boolean(options.expandForOffset && isFinite(minLeft) && isFinite(maxRight));
+    const cellW = useUnionBounds
+      ? Math.max(Math.round(maxW), Math.ceil(maxRight - minLeft))
+      : Math.max(1, Math.round(maxW));
+    const cellH = useUnionBounds
+      ? Math.max(Math.round(maxH), Math.ceil(maxBottom - minTop))
+      : Math.max(1, Math.round(maxH));
 
     // 计算网格列数与行数 (若未指定 columns 则自适应平方根排版)
     const columns = options.columns && options.columns > 0
@@ -6742,11 +6877,17 @@ class Exporter {
       const fw = frame.rect?.w || cellW;
       const fh = frame.rect?.h || cellH;
 
-      // 单元格内对齐：默认居中；亦可支持底部居中
       let destX = cellX + Math.round((cellW - fw) / 2);
       let destY = cellY + Math.round((cellH - fh) / 2);
 
-      if (alignment === 'bottom-center') {
+      if (useUnionBounds) {
+        const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
+        const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
+        const ox = (frame.offset && typeof frame.offset.x === 'number') ? frame.offset.x : 0;
+        const oy = (frame.offset && typeof frame.offset.y === 'number') ? frame.offset.y : 0;
+        destX = cellX + Math.round(-minLeft + ox - fw * px);
+        destY = cellY + Math.round(-minTop + oy - fh * py);
+      } else if (alignment === 'bottom-center') {
         destX = cellX + Math.round((cellW - fw) / 2);
         destY = cellY + (cellH - fh);
       }
@@ -6763,7 +6904,8 @@ class Exporter {
         x: destX,
         y: destY,
         w: fw,
-        h: fh
+        h: fh,
+        offsetIncluded: useUnionBounds
       });
     }
 
@@ -6930,8 +7072,8 @@ class Exporter {
 
         // 4. 将每一帧严格按无交叉目标坐标（烘焙 offset 对齐偏移）绘制到新大图
         for (const item of layout.items) {
-          const ox = (options.bakeOffset !== false && item.frame?.offset) ? (item.frame.offset.x || 0) : 0;
-          const oy = (options.bakeOffset !== false && item.frame?.offset) ? (item.frame.offset.y || 0) : 0;
+          const ox = (!item.offsetIncluded && options.bakeOffset !== false && item.frame?.offset) ? (item.frame.offset.x || 0) : 0;
+          const oy = (!item.offsetIncluded && options.bakeOffset !== false && item.frame?.offset) ? (item.frame.offset.y || 0) : 0;
 
           if (typeof ctx.save === 'function' && typeof ctx.clip === 'function') {
             ctx.save();
@@ -7262,6 +7404,7 @@ class SpriteAnimatorApp {
     this.pivotDots = document.querySelectorAll('.pivot-dot');
     this.offsetXInput = document.getElementById('offset-x');
     this.offsetYInput = document.getElementById('offset-y');
+    this.btnAlignAllLeftFoot = document.getElementById('btn-align-all-left-foot');
     this.btnAlignAllXY = document.getElementById('btn-align-all-xy');
     this.btnAlignFrameX = document.getElementById('btn-align-frame-x');
     this.btnAlignFrameGround = document.getElementById('btn-align-frame-ground');
@@ -7915,10 +8058,15 @@ class SpriteAnimatorApp {
       this.offsetYInput.addEventListener('change', handleOffsetChange);
     }
 
-    // 2.5 自动脚底贴地、X轴角色重心对齐与归零快捷按钮
+    // 2.5 自动左脚对齐、角色重心对齐、脚底贴地与归零快捷按钮
+    if (this.btnAlignAllLeftFoot) {
+      this.btnAlignAllLeftFoot.addEventListener('click', () => {
+        this.handleAutoAlignGround(true, { alignX: true, alignY: true, xMode: 'left-foot' });
+      });
+    }
     if (this.btnAlignAllXY) {
       this.btnAlignAllXY.addEventListener('click', () => {
-        this.handleAutoAlignGround(true, { alignX: true, alignY: true });
+        this.handleAutoAlignGround(true, { alignX: true, alignY: true, xMode: 'body-center' });
       });
     }
     if (this.btnAlignAllGround) {
@@ -7928,7 +8076,7 @@ class SpriteAnimatorApp {
     }
     if (this.btnAlignFrameX) {
       this.btnAlignFrameX.addEventListener('click', () => {
-        this.handleAutoAlignGround(false, { alignX: true, alignY: false });
+        this.handleAutoAlignGround(false, { alignX: true, alignY: true, xMode: 'left-foot' });
       });
     }
     if (this.btnAlignFrameGround) {
@@ -7975,10 +8123,10 @@ class SpriteAnimatorApp {
   }
 
   /**
-   * 自动扫描角色真实前景像素最低点（脚底）与角色躯干水平重心（排除白色刀光干扰），
-   * 自动补偿 offset.x / offset.y 使各帧角色水平重心与地面线精准对齐
+   * 自动扫描角色真实前景像素最低点（脚底）、左脚接地位置或角色躯干水平重心（排除白色刀光干扰），
+   * 自动补偿 offset.x / offset.y 使各帧角色精准对齐
    * @param {boolean} alignAll - true: 一键对齐全部动作帧; false: 仅对齐当前选中帧
-   * @param {{ alignX?: boolean, alignY?: boolean }} [opts={ alignX: false, alignY: true }]
+   * @param {{ alignX?: boolean, alignY?: boolean, xMode?: 'left-foot'|'body-center'|'right-foot' }} [opts={ alignX: false, alignY: true }]
    */
   handleAutoAlignGround(alignAll = false, opts = {}) {
     const sourceImage = state.get('sourceImage');
@@ -7990,6 +8138,7 @@ class SpriteAnimatorApp {
 
     const alignX = opts.alignX === true;
     const alignY = opts.alignY !== false;
+    const xMode = opts.xMode || 'body-center';
 
     const targets = alignAll ? frames : [state.getSelectedFrame()].filter(Boolean);
     if (targets.length === 0) {
@@ -8032,7 +8181,7 @@ class SpriteAnimatorApp {
       }
 
       if (bounds && !bounds.empty) {
-        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX, alignY });
+        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX, alignY, xMode });
         alignedCount++;
       }
     }
@@ -8045,10 +8194,12 @@ class SpriteAnimatorApp {
     this.renderPlayerViewport();
 
     if (alignAll) {
-      const modeDesc = (alignX && alignY) ? 'X 轴角色重心与 Y 轴脚底地面线' : 'Y 轴脚底地面线';
-      const msg = `已完成全部 ${alignedCount} 帧 ${modeDesc}自动对齐！(可在播放器中直接按住人物拖拽微调单帧)`;
+      const modeDesc = alignX
+        ? (xMode === 'left-foot' ? '左脚锚点与地面线' : '角色中心与地面线')
+        : 'Y 轴脚底地面线';
+      const msg = `已完成全部 ${alignedCount} 帧 [${modeDesc}] 自动对齐！视口已自动居中完整显示刀光`;
       this.setStatus(msg);
-      this.showToast(`全部 ${alignedCount} 帧已自动完成 ${modeDesc}对齐！`, 'success');
+      this.showToast(`全部 ${alignedCount} 帧已按 [${modeDesc}] 自动对齐，刀光完整自适应！`, 'success');
     } else if (selectedFrame) {
       this.setStatus(`已自动对齐 [${selectedFrame.name}] (X偏移 = ${selectedFrame.offset?.x || 0}px, Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
     }
@@ -8388,6 +8539,7 @@ class SpriteAnimatorApp {
       const result = await Exporter.exportNewSpriteSheet(frames, {
         sourceImage,
         padding: 16,
+        expandForOffset: true,
         filename: `${animName}_clean_sheet.png`
       });
 

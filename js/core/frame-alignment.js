@@ -174,10 +174,10 @@ export class FrameAlignment {
   /**
    * 根据检测到的角色真实内容边界，自动计算并设置帧的 offset.y（及可选 offset.x），
    * 使角色真实最低点（脚底）精准贴合到地面基准线 targetBaseY，
-   * 使角色本体重心（排除白色刀光干扰）精准对齐水平基准中心 targetBaseX
+   * 使角色左脚 / 躯干重心 / 右脚精准对齐水平基准中心 targetBaseX
    * @param {Object} frame 帧对象
-   * @param {{ localMinX: number, localMaxX: number, localMinY: number, localMaxY: number, bodyCenterX?: number }} bounds 角色真实像素边界
-   * @param {{ alignX?: boolean, alignY?: boolean }} [options={}]
+   * @param {{ localMinX: number, localMaxX: number, localMinY: number, localMaxY: number, bodyCenterX?: number, leftFootX?: number, rightFootX?: number }} bounds 角色真实像素边界
+   * @param {{ alignX?: boolean, alignY?: boolean, xMode?: 'left-foot'|'body-center'|'right-foot' }} [options={}]
    * @returns {{ x: number, y: number }} 更新后的 offset
    */
   autoAlignFrameToGround(frame, bounds, options = {}) {
@@ -199,11 +199,18 @@ export class FrameAlignment {
     }
 
     if (options.alignX) {
-      // 优先采用排除白色刀光特效后的角色本体水平重心 bodyCenterX
-      const contentCenterX = (typeof bounds.bodyCenterX === 'number')
-        ? bounds.bodyCenterX
-        : (bounds.localMinX + bounds.localMaxX + 1) / 2;
-      frame.offset.x = Math.round(w * px - contentCenterX);
+      const xMode = options.xMode || 'body-center';
+      let targetLocalX;
+      if (xMode === 'left-foot' && typeof bounds.leftFootX === 'number') {
+        targetLocalX = bounds.leftFootX;
+      } else if (xMode === 'right-foot' && typeof bounds.rightFootX === 'number') {
+        targetLocalX = bounds.rightFootX;
+      } else if (typeof bounds.bodyCenterX === 'number') {
+        targetLocalX = bounds.bodyCenterX;
+      } else {
+        targetLocalX = (bounds.localMinX + bounds.localMaxX + 1) / 2;
+      }
+      frame.offset.x = Math.round(w * px - targetLocalX);
     }
 
     return { ...frame.offset };
@@ -354,7 +361,60 @@ export class FrameAlignment {
    * @param {Object} displayConfig 显示配置 { showGround, onionSkin, showPivot, onionSkinOpacity }
    */
   /**
-   * 计算视口舞台的最佳缩放比 (自适应完整展示整个人物与武器)
+   * 计算全部动作帧相对于锚点基准 (0, 0) 的联合包围盒 (Union Bounding Box)
+   * 确保当以左脚对齐或存在较大 offset 时，右侧长枪与大刀光依然 100% 纳入视口计算
+   * @param {Array<Object>} allFrames 
+   * @param {Object|null} currentFrame 
+   * @returns {{ minLeft: number, maxRight: number, minTop: number, maxBottom: number, spanW: number, spanH: number }}
+   */
+  calculateStageBounds(allFrames = [], currentFrame = null) {
+    const list = (Array.isArray(allFrames) && allFrames.length > 0)
+      ? allFrames
+      : (currentFrame ? [currentFrame] : []);
+
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    let minTop = Infinity;
+    let maxBottom = -Infinity;
+
+    list.forEach(f => {
+      if (!f || !f.rect) return;
+      const w = f.rect.w || 0;
+      const h = f.rect.h || 0;
+      if (w <= 0 || h <= 0) return;
+
+      const px = (f.pivot && typeof f.pivot.x === 'number') ? f.pivot.x : 0.5;
+      const py = (f.pivot && typeof f.pivot.y === 'number') ? f.pivot.y : 1.0;
+      const ox = (f.offset && typeof f.offset.x === 'number') ? f.offset.x : 0;
+      const oy = (f.offset && typeof f.offset.y === 'number') ? f.offset.y : 0;
+
+      const l = ox - w * px;
+      const r = ox + w * (1 - px);
+      const t = oy - h * py;
+      const b = oy + h * (1 - py);
+
+      if (l < minLeft) minLeft = l;
+      if (r > maxRight) maxRight = r;
+      if (t < minTop) minTop = t;
+      if (b > maxBottom) maxBottom = b;
+    });
+
+    if (!isFinite(minLeft) || !isFinite(maxRight)) {
+      return { minLeft: 0, maxRight: 0, minTop: 0, maxBottom: 0, spanW: 0, spanH: 0 };
+    }
+
+    return {
+      minLeft,
+      maxRight,
+      minTop,
+      maxBottom,
+      spanW: Math.max(0, maxRight - minLeft),
+      spanH: Math.max(0, maxBottom - minTop)
+    };
+  }
+
+  /**
+   * 计算视口舞台的最佳缩放比 (自适应完整展示整个人物与武器/刀光，考虑 offset 与锚点跨度)
    * @param {number} canvasWidth 
    * @param {number} canvasHeight 
    * @param {Array<Object>} allFrames 
@@ -371,18 +431,9 @@ export class FrameAlignment {
       if (!isNaN(parsed) && parsed > 0) return parsed;
     }
 
-    // 自适应 Auto Fit 逻辑
-    let maxW = currentFrame?.rect?.w || 0;
-    let maxH = currentFrame?.rect?.h || 0;
-
-    if (Array.isArray(allFrames)) {
-      allFrames.forEach(f => {
-        if (f && f.rect) {
-          if (f.rect.w > maxW) maxW = f.rect.w;
-          if (f.rect.h > maxH) maxH = f.rect.h;
-        }
-      });
-    }
+    const bounds = this.calculateStageBounds(allFrames, currentFrame);
+    const maxW = bounds.spanW;
+    const maxH = bounds.spanH;
 
     if (maxW <= 0 || maxH <= 0) return 1.0;
 
@@ -417,12 +468,17 @@ export class FrameAlignment {
     // 清空背景
     ctx.clearRect(0, 0, width, height);
 
-    // 计算地面与锚点基准坐标：水平居中，脚底基准线位于画布高 82% 处
-    const targetBaseX = Math.round(width / 2);
+    // 计算联合包围盒与视口缩放比
+    const stageBounds = this.calculateStageBounds(allFrames, currentFrame);
+    const scale = this.calculateStageScale(width, height, allFrames, currentFrame, displayConfig.zoom);
+
+    // 动态计算水平基准坐标 targetBaseX：
+    // 当以左脚为锚点对齐时，角色身体与右侧大刀光均在锚点右侧 (minLeft + maxRight > 0)，
+    // 自动将基准锚点向左平移，使整个动作序列 [minLeft, maxRight] 100% 居中完整呈现在播放器视口中央，绝不出框！
+    const centerOffsetX = ((stageBounds.minLeft + stageBounds.maxRight) / 2) * scale;
+    const targetBaseX = Math.round(width / 2 - centerOffsetX);
     const targetBaseY = Math.round(height * 0.82);
 
-    // 计算视口缩放比
-    const scale = this.calculateStageScale(width, height, allFrames, currentFrame, displayConfig.zoom);
     this.lastRenderScale = scale;
     this.lastTargetBaseX = targetBaseX;
     this.lastTargetBaseY = targetBaseY;

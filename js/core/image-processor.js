@@ -597,6 +597,54 @@ export class ImageProcessor {
       return null;
     }
 
+    const contentW = localMaxX - localMinX + 1;
+    const contentH = localMaxY - localMinY + 1;
+
+    // 二次扫描贴近脚底的接地层 (底部 8% 高度范围，排除白色刀光)，精准定位左脚与右脚水平位置
+    const footBandH = Math.max(6, Math.min(30, Math.round(contentH * 0.08)));
+    const footStartY = startY + Math.max(localMinY, localMaxY - footBandH);
+    const footEndY = startY + localMaxY + 1;
+    let footMinX = localMaxX;
+    let footMaxX = localMinX;
+    let foundFoot = false;
+
+    for (let py = footStartY; py < footEndY; py++) {
+      const rowOffset = py * imgW;
+      for (let px = startX + localMinX; px <= startX + localMaxX; px++) {
+        const pOffset = (rowOffset + px) * 4;
+        const r = data[pOffset];
+        const g = data[pOffset + 1];
+        const b = data[pOffset + 2];
+        const a = data[pOffset + 3];
+
+        let isFg = isBgTransparent
+          ? (a > alphaThreshold)
+          : (a > alphaThreshold && (Math.abs(r - bgR) > tolerance || Math.abs(g - bgG) > tolerance || Math.abs(b - bgB) > tolerance));
+
+        if (isFg) {
+          const maxC = Math.max(r, g, b);
+          const minC = Math.min(r, g, b);
+          const isWhiteSlash = (r > 210 && g > 210 && b > 210 && (maxC - minC) < 35);
+          if (!isWhiteSlash) {
+            const lx = px - startX;
+            if (lx < footMinX) footMinX = lx;
+            if (lx > footMaxX) footMaxX = lx;
+            foundFoot = true;
+          }
+        }
+      }
+    }
+
+    if (!foundFoot) {
+      footMinX = localMinX;
+      footMaxX = localMaxX;
+    }
+
+    // 左脚掌中心点（从左脚最左边缘向右偏移约 12px 脚掌半宽）
+    const footPad = Math.min(12, Math.round((footMaxX - footMinX) * 0.15));
+    const leftFootX = footMinX + footPad;
+    const rightFootX = footMaxX - footPad;
+
     const boxCenterX = (localMinX + localMaxX + 1) / 2;
     const massCenterX = allSumX / allCount;
     // 若非白色角色本体像素占比充足 (>10%)，优先使用排除刀光后的角色本体重心
@@ -612,11 +660,13 @@ export class ImageProcessor {
       bottomGap: actualH - 1 - localMaxY,
       leftGap: localMinX,
       rightGap: actualW - 1 - localMaxX,
-      contentW: localMaxX - localMinX + 1,
-      contentH: localMaxY - localMinY + 1,
+      contentW,
+      contentH,
       boxCenterX,
       massCenterX,
-      bodyCenterX
+      bodyCenterX,
+      leftFootX,
+      rightFootX
     };
   }
 }

@@ -161,15 +161,41 @@ export class Exporter {
     // 计算所有动作帧的最大宽度和最大高度作为规整单元格尺寸
     let maxW = 1;
     let maxH = 1;
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    let minTop = Infinity;
+    let maxBottom = -Infinity;
+
     for (const frame of frames) {
       if (frame.rect) {
-        if (frame.rect.w > maxW) maxW = frame.rect.w;
-        if (frame.rect.h > maxH) maxH = frame.rect.h;
+        const fw = frame.rect.w || 1;
+        const fh = frame.rect.h || 1;
+        if (fw > maxW) maxW = fw;
+        if (fh > maxH) maxH = fh;
+
+        const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
+        const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
+        const ox = (frame.offset && typeof frame.offset.x === 'number') ? frame.offset.x : 0;
+        const oy = (frame.offset && typeof frame.offset.y === 'number') ? frame.offset.y : 0;
+
+        const l = ox - fw * px;
+        const r = ox + fw * (1 - px);
+        const t = oy - fh * py;
+        const b = oy + fh * (1 - py);
+        if (l < minLeft) minLeft = l;
+        if (r > maxRight) maxRight = r;
+        if (t < minTop) minTop = t;
+        if (b > maxBottom) maxBottom = b;
       }
     }
 
-    const cellW = Math.max(1, Math.round(maxW));
-    const cellH = Math.max(1, Math.round(maxH));
+    const useUnionBounds = Boolean(options.expandForOffset && isFinite(minLeft) && isFinite(maxRight));
+    const cellW = useUnionBounds
+      ? Math.max(Math.round(maxW), Math.ceil(maxRight - minLeft))
+      : Math.max(1, Math.round(maxW));
+    const cellH = useUnionBounds
+      ? Math.max(Math.round(maxH), Math.ceil(maxBottom - minTop))
+      : Math.max(1, Math.round(maxH));
 
     // 计算网格列数与行数 (若未指定 columns 则自适应平方根排版)
     const columns = options.columns && options.columns > 0
@@ -196,11 +222,17 @@ export class Exporter {
       const fw = frame.rect?.w || cellW;
       const fh = frame.rect?.h || cellH;
 
-      // 单元格内对齐：默认居中；亦可支持底部居中
       let destX = cellX + Math.round((cellW - fw) / 2);
       let destY = cellY + Math.round((cellH - fh) / 2);
 
-      if (alignment === 'bottom-center') {
+      if (useUnionBounds) {
+        const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
+        const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
+        const ox = (frame.offset && typeof frame.offset.x === 'number') ? frame.offset.x : 0;
+        const oy = (frame.offset && typeof frame.offset.y === 'number') ? frame.offset.y : 0;
+        destX = cellX + Math.round(-minLeft + ox - fw * px);
+        destY = cellY + Math.round(-minTop + oy - fh * py);
+      } else if (alignment === 'bottom-center') {
         destX = cellX + Math.round((cellW - fw) / 2);
         destY = cellY + (cellH - fh);
       }
@@ -217,7 +249,8 @@ export class Exporter {
         x: destX,
         y: destY,
         w: fw,
-        h: fh
+        h: fh,
+        offsetIncluded: useUnionBounds
       });
     }
 
@@ -384,8 +417,8 @@ export class Exporter {
 
         // 4. 将每一帧严格按无交叉目标坐标（烘焙 offset 对齐偏移）绘制到新大图
         for (const item of layout.items) {
-          const ox = (options.bakeOffset !== false && item.frame?.offset) ? (item.frame.offset.x || 0) : 0;
-          const oy = (options.bakeOffset !== false && item.frame?.offset) ? (item.frame.offset.y || 0) : 0;
+          const ox = (!item.offsetIncluded && options.bakeOffset !== false && item.frame?.offset) ? (item.frame.offset.x || 0) : 0;
+          const oy = (!item.offsetIncluded && options.bakeOffset !== false && item.frame?.offset) ? (item.frame.offset.y || 0) : 0;
 
           if (typeof ctx.save === 'function' && typeof ctx.clip === 'function') {
             ctx.save();
