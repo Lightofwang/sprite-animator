@@ -15,17 +15,22 @@
         <div class="brand">
           <div class="brand-icon">⚡</div>
           <span>Sprite Animator</span>
-          <span class="badge-version">v2.1</span>
+          <span class="badge-version">v2.2</span>
         </div>
 
         <div class="toolbar-divider"></div>
 
         <!-- 文件操作区 -->
         <div class="toolbar-group">
-          <input type="file" id="file-input" accept="image/png, image/jpeg, image/webp" style="display: none;">
-          <button class="btn btn-secondary" id="btn-import-image" title="导入序列帧大图 (PNG/JPG)">
+          <input type="file" id="file-input" accept="image/png, image/jpeg, image/webp, image/gif" style="display: none;">
+          <input type="file" id="gif-file-input" accept="image/gif" style="display: none;">
+          <button class="btn btn-secondary" id="btn-import-image" title="导入序列帧大图或 GIF 动图 (PNG/JPG/GIF)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             <span>导入图片</span>
+          </button>
+          <button class="btn btn-secondary" id="btn-import-gif" title="导入 GIF 动图并自动拆分为序列帧">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            <span>拆分 GIF</span>
           </button>
           <button class="btn btn-secondary" id="btn-auto-detect" title="智能识别所有动作角色包围盒">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
@@ -149,9 +154,12 @@
           <!-- 空状态提示与拖拽放置区 -->
           <div class="empty-placeholder" id="empty-placeholder">
             <div class="placeholder-icon">📂</div>
-            <div class="placeholder-title">点击或拖拽序列帧大图至此处</div>
-            <div class="placeholder-hint">支持 PNG / JPG / WebP，支持透明图与纯色背景图</div>
-            <button class="btn btn-primary" id="btn-empty-import" style="margin-top: 8px;">选择本地图像</button>
+            <div class="placeholder-title">点击或拖拽序列帧大图 / GIF 动图至此处</div>
+            <div class="placeholder-hint">支持 PNG / JPG / WebP，支持 GIF 动图自动无损拆分序列帧</div>
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <button class="btn btn-primary" id="btn-empty-import">选择精灵大图</button>
+              <button class="btn btn-secondary" id="btn-empty-import-gif">🎞️ 拆分 GIF 动图</button>
+            </div>
           </div>
         </div>
 
@@ -500,6 +508,38 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" id="btn-cancel-grid">取消</button>
         <button class="btn btn-primary" id="btn-confirm-grid">生成网格切片</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- GIF 动图拆分模态框 (GIF Splitter Modal) -->
+  <div class="modal-backdrop" id="modal-gif-split">
+    <div class="modal-dialog" style="max-width: 480px;">
+      <div class="modal-header">
+        <span>🎞️ GIF 动图拆分完成</span>
+        <button class="btn btn-icon btn-secondary" id="btn-close-gif-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; gap: 16px; align-items: center; background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <div style="width: 96px; height: 96px; background: #161822; border-radius: 4px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;" class="checkerboard-bg">
+            <canvas id="gif-preview-canvas" width="96" height="96" style="max-width: 100%; max-height: 100%; object-fit: contain;"></canvas>
+          </div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 12px;">
+            <div style="font-weight: 600; font-size: 13px; color: var(--text-main); word-break: break-all;" id="gif-meta-filename">animation.gif</div>
+            <div style="color: var(--text-sub);">尺寸: <span id="gif-meta-dim" style="color: var(--accent-blue); font-family: var(--font-mono); font-weight: 600;">0 × 0 px</span></div>
+            <div style="color: var(--text-sub);">拆解帧数: <span id="gif-meta-frames" style="color: #06d6a0; font-weight: 600;">0 帧</span></div>
+            <div style="color: var(--text-sub);">原始速率: <span id="gif-meta-fps" style="font-family: var(--font-mono);">0 FPS (时长 0ms)</span></div>
+          </div>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-sub); line-height: 1.5; margin-top: 4px;">
+          请选择后续处理方式：
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button class="btn btn-secondary" id="btn-cancel-gif">取消</button>
+        <button class="btn btn-secondary" id="btn-gif-download-zip" title="直接将这组透明单帧 PNG 压缩打包下载到本地">📦 下载序列帧包 (.zip)</button>
+        <button class="btn btn-primary" id="btn-gif-to-workspace" title="自动排版为整齐精灵表大图载入工作台，创建各帧选框并立即开播">🚀 载入工作台编辑</button>
       </div>
     </div>
   </div>

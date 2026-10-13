@@ -25,6 +25,7 @@ MODULE_FILES = [
     BASE_DIR / "js" / "core" / "frame-alignment.js",
     BASE_DIR / "js" / "core" / "animation-player.js",
     BASE_DIR / "js" / "core" / "canvas-workspace.js",
+    BASE_DIR / "js" / "core" / "gif-decoder.js",
     BASE_DIR / "js" / "core" / "exporter.js",
     BASE_DIR / "js" / "app.js",
 ]
