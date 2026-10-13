@@ -168,8 +168,8 @@ export class Exporter {
 
     for (const frame of frames) {
       if (frame.rect) {
-        const fw = frame.rect.w || 1;
-        const fh = frame.rect.h || 1;
+        const fw = Math.max(1, Math.round(frame.rect.w || 1));
+        const fh = Math.max(1, Math.round(frame.rect.h || 1));
         if (fw > maxW) maxW = fw;
         if (fh > maxH) maxH = fh;
 
@@ -178,10 +178,12 @@ export class Exporter {
         const ox = (frame.offset && typeof frame.offset.x === 'number') ? frame.offset.x : 0;
         const oy = (frame.offset && typeof frame.offset.y === 'number') ? frame.offset.y : 0;
 
-        const l = ox - fw * px;
-        const r = ox + fw * (1 - px);
-        const t = oy - fh * py;
-        const b = oy + fh * (1 - py);
+        const dxLocal = Math.round(ox - fw * px);
+        const dyLocal = Math.round(oy - fh * py);
+        const l = dxLocal;
+        const r = dxLocal + fw;
+        const t = dyLocal;
+        const b = dyLocal + fh;
         if (l < minLeft) minLeft = l;
         if (r > maxRight) maxRight = r;
         if (t < minTop) minTop = t;
@@ -219,8 +221,8 @@ export class Exporter {
       const cellX = padding + col * (cellW + padding);
       const cellY = padding + row * (cellH + padding);
 
-      const fw = frame.rect?.w || cellW;
-      const fh = frame.rect?.h || cellH;
+      const fw = Math.max(1, Math.round(frame.rect?.w || cellW));
+      const fh = Math.max(1, Math.round(frame.rect?.h || cellH));
 
       let destX = cellX + Math.round((cellW - fw) / 2);
       let destY = cellY + Math.round((cellH - fh) / 2);
@@ -230,8 +232,10 @@ export class Exporter {
         const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
         const ox = (frame.offset && typeof frame.offset.x === 'number') ? frame.offset.x : 0;
         const oy = (frame.offset && typeof frame.offset.y === 'number') ? frame.offset.y : 0;
-        destX = cellX + Math.round(-minLeft + ox - fw * px);
-        destY = cellY + Math.round(-minTop + oy - fh * py);
+        const dxLocal = Math.round(ox - fw * px);
+        const dyLocal = Math.round(oy - fh * py);
+        destX = cellX - minLeft + dxLocal;
+        destY = cellY - minTop + dyLocal;
       } else if (alignment === 'bottom-center') {
         destX = cellX + Math.round((cellW - fw) / 2);
         destY = cellY + (cellH - fh);
@@ -273,8 +277,9 @@ export class Exporter {
   /**
    * 将全部修复后的动作帧提取为透明 PNG 并压缩打包为 ZIP 文件下载
    * 同时生成包含 fps, pivot, offset, rect 元数据的 animation.json
+   * 当开启 expandForOffset 时，自动按全序列联合包围盒生成统一尺寸画布，绝不裁切任何偏移画面
    * @param {Array<Object>} frames 
-   * @param {Object} options { sourceImage, fps, name, filename, onProgress, download }
+   * @param {Object} options { sourceImage, fps, name, filename, expandForOffset, onProgress, download }
    * @returns {Promise<{ success: boolean, count: number, blob: Blob|Uint8Array, json: Object, error?: string }>}
    */
   static async exportFramesAsZip(frames, options = {}) {
@@ -298,19 +303,58 @@ export class Exporter {
       const zip = new JSZip();
       const framesMeta = [];
 
+      // 计算全部帧相对于各自对齐锚点的联合包围盒 (Union Bounding Box)，确保偏移后绝不裁切任何像素
+      let maxW = 1;
+      let maxH = 1;
+      let minLeft = Infinity;
+      let maxRight = -Infinity;
+      let minTop = Infinity;
+      let maxBottom = -Infinity;
+
+      for (const f of frames) {
+        const fw = Math.max(1, Math.round(f.rect?.w || 32));
+        const fh = Math.max(1, Math.round(f.rect?.h || 32));
+        if (fw > maxW) maxW = fw;
+        if (fh > maxH) maxH = fh;
+
+        const px = (f.pivot && typeof f.pivot.x === 'number') ? f.pivot.x : 0.5;
+        const py = (f.pivot && typeof f.pivot.y === 'number') ? f.pivot.y : 1.0;
+        const ox = (options.bakeOffset !== false && f.offset && typeof f.offset.x === 'number') ? f.offset.x : 0;
+        const oy = (options.bakeOffset !== false && f.offset && typeof f.offset.y === 'number') ? f.offset.y : 0;
+
+        const dxLocal = Math.round(ox - fw * px);
+        const dyLocal = Math.round(oy - fh * py);
+        if (dxLocal < minLeft) minLeft = dxLocal;
+        if (dxLocal + fw > maxRight) maxRight = dxLocal + fw;
+        if (dyLocal < minTop) minTop = dyLocal;
+        if (dyLocal + fh > maxBottom) maxBottom = dyLocal + fh;
+      }
+
+      const useUnionBounds = Boolean(options.expandForOffset && isFinite(minLeft) && isFinite(maxRight));
+      const unionW = useUnionBounds ? Math.max(maxW, Math.ceil(maxRight - minLeft)) : maxW;
+      const unionH = useUnionBounds ? Math.max(maxH, Math.ceil(maxBottom - minTop)) : maxH;
+
       for (let i = 0; i < frames.length; i++) {
         const frame = frames[i];
-        const fw = Math.max(1, frame.rect?.w || 32);
-        const fh = Math.max(1, frame.rect?.h || 32);
-
-        // 创建单帧透明 Canvas 并渲染修复及对齐偏移后的帧
-        const singleCanvas = this.createCanvas(fw, fh);
-        const ctx = singleCanvas.getContext('2d');
+        const fw = Math.max(1, Math.round(frame.rect?.w || 32));
+        const fh = Math.max(1, Math.round(frame.rect?.h || 32));
+        const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
+        const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
         const ox = (options.bakeOffset !== false && frame.offset) ? (frame.offset.x || 0) : 0;
         const oy = (options.bakeOffset !== false && frame.offset) ? (frame.offset.y || 0) : 0;
+
+        const outW = useUnionBounds ? unionW : fw;
+        const outH = useUnionBounds ? unionH : fh;
+        const dx = useUnionBounds ? (-minLeft + Math.round(ox - fw * px)) : ox;
+        const dy = useUnionBounds ? (-minTop + Math.round(oy - fh * py)) : oy;
+
+        // 创建单帧透明 Canvas 并渲染修复及对齐偏移后的帧（完整容纳不裁切）
+        const singleCanvas = this.createCanvas(outW, outH);
+        const ctx = singleCanvas.getContext('2d');
         if (ctx) {
-          ctx.clearRect(0, 0, fw, fh);
-          this.drawFrameToContext(ctx, frame, ox, oy, fw, fh, sourceImage);
+          ctx.clearRect(0, 0, outW, outH);
+          ctx.imageSmoothingEnabled = false;
+          this.drawFrameToContext(ctx, frame, dx, dy, fw, fh, sourceImage);
         }
 
         // 提取透明 PNG Blob
@@ -329,6 +373,10 @@ export class Exporter {
             y: frame.rect?.y || 0,
             w: fw,
             h: fh
+          },
+          exportSize: {
+            w: outW,
+            h: outH
           },
           offset: {
             x: frame.offset?.x || 0,

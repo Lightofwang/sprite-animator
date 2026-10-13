@@ -119,9 +119,7 @@ class SpriteAnimatorApp {
     this.pivotDots = document.querySelectorAll('.pivot-dot');
     this.offsetXInput = document.getElementById('offset-x');
     this.offsetYInput = document.getElementById('offset-y');
-    this.btnAlignAllLeftFoot = document.getElementById('btn-align-all-left-foot');
     this.btnAlignAllXY = document.getElementById('btn-align-all-xy');
-    this.btnAlignFrameX = document.getElementById('btn-align-frame-x');
     this.btnAlignFrameGround = document.getElementById('btn-align-frame-ground');
     this.btnAlignAllGround = document.getElementById('btn-align-all-ground');
     this.btnResetOffset = document.getElementById('btn-reset-offset');
@@ -773,12 +771,7 @@ class SpriteAnimatorApp {
       this.offsetYInput.addEventListener('change', handleOffsetChange);
     }
 
-    // 2.5 自动左脚对齐、角色重心对齐、脚底贴地与归零快捷按钮
-    if (this.btnAlignAllLeftFoot) {
-      this.btnAlignAllLeftFoot.addEventListener('click', () => {
-        this.handleAutoAlignGround(true, { alignX: true, alignY: true, xMode: 'left-foot' });
-      });
-    }
+    // 2.5 自动对齐、脚底贴地与归零快捷按钮（自定义位置可直接拖拽预览框角色）
     if (this.btnAlignAllXY) {
       this.btnAlignAllXY.addEventListener('click', () => {
         this.handleAutoAlignGround(true, { alignX: true, alignY: true, xMode: 'body-center' });
@@ -787,11 +780,6 @@ class SpriteAnimatorApp {
     if (this.btnAlignAllGround) {
       this.btnAlignAllGround.addEventListener('click', () => {
         this.handleAutoAlignGround(true, { alignX: false, alignY: true });
-      });
-    }
-    if (this.btnAlignFrameX) {
-      this.btnAlignFrameX.addEventListener('click', () => {
-        this.handleAutoAlignGround(false, { alignX: true, alignY: true, xMode: 'left-foot' });
       });
     }
     if (this.btnAlignFrameGround) {
@@ -1258,6 +1246,7 @@ class SpriteAnimatorApp {
         sourceImage,
         fps: playerState.fps || 12,
         name: animName,
+        expandForOffset: true,
         filename: `${animName}_frames.zip`,
         onProgress: (current, total, msg) => {
           const percent = Math.round((current / (total || 1)) * 90);

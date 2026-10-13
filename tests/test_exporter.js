@@ -232,6 +232,57 @@ console.log('\n▶ [测试组 4] 动图 GIF 编码引擎与视口对齐验证:')
   assert(gifProgressFired === true, 'GIF 导出过程中平滑汇报进度信息');
 }
 
+// ----------------------------------------------------
+// 测试组 5: 自定义大幅偏移下导出防裁切验证 (ZIP / Sprite Sheet / GIF)
+// ----------------------------------------------------
+console.log('\n▶ [测试组 5] 自定义大幅偏移下导出 100% 防裁切验证:');
+
+{
+  const customFrames = [
+    {
+      id: 'f1',
+      name: '帧 1',
+      rect: { x: 0, y: 0, w: 100, h: 100 },
+      offset: { x: -60, y: 0 }, // 向左大幅自定义偏移 60px
+      pivot: { x: 0.5, y: 1.0 }
+    },
+    {
+      id: 'f2',
+      name: '帧 2',
+      rect: { x: 100, y: 0, w: 100, h: 100 },
+      offset: { x: 80, y: -50 }, // 向右偏移 80px + 向上腾空 50px
+      pivot: { x: 0.5, y: 1.0 }
+    }
+  ];
+
+  // 1. 验证新精灵表布局在 expandForOffset: true 下完整包含偏移范围
+  const sheetLayout = Exporter.calculateSpriteSheetLayout(customFrames, {
+    padding: 16,
+    expandForOffset: true
+  });
+  // f1: [-110, -10], f2: [30, 130] => 联合宽度 = 130 - (-110) = 240
+  // f1: [-100, 0], f2: [-150, -50] => 联合高度 = 0 - (-150) = 150
+  assert(sheetLayout.cellW === 240 && sheetLayout.cellH === 150, `精灵表单元格自动扩展为联合包围盒 (240x150, 实际: ${sheetLayout.cellW}x${sheetLayout.cellH})`);
+  for (const item of sheetLayout.items) {
+    assert(
+      item.x >= item.cellX && item.x + item.w <= item.cellX + item.cellW &&
+      item.y >= item.cellY && item.y + item.h <= item.cellY + item.cellH,
+      `帧 ${item.index + 1} 绘制范围严格落在单元格内部，100% 无裁切缺失`
+    );
+  }
+
+  // 2. 验证 ZIP 序列帧在 expandForOffset: true 下导出尺寸扩展为 240x150
+  const zipExpand = await Exporter.exportFramesAsZip(customFrames, {
+    expandForOffset: true,
+    download: false
+  });
+  assert(zipExpand.success === true, '带大幅自定义偏移的 ZIP 序列帧导出成功');
+  assert(
+    zipExpand.json.frames[0].exportSize.w === 240 && zipExpand.json.frames[0].exportSize.h === 150,
+    'ZIP 导出的单帧 PNG 画布自动扩展为 240x150 联合包围盒，绝不裁切边缘画面'
+  );
+}
+
 console.log('\n======================================================');
 console.log(`📊 测试结果: ${passed} 通过, ${failed} 失败`);
 console.log('======================================================\n');
