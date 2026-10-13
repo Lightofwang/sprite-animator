@@ -812,12 +812,12 @@ class SpriteAnimatorApp {
       });
     }
 
-    // 4. 地面参考线开关联动
+    // 4. XY 对齐参考标线与刻度开关联动
     if (this.groundLineToggle) {
       this.groundLineToggle.addEventListener('change', (e) => {
         state.setPlayerState({ showGround: e.target.checked });
         this.renderPlayerViewport();
-        this.setStatus(e.target.checked ? '已开启地面水平参考基准线' : '已关闭地面参考线');
+        this.setStatus(e.target.checked ? '已开启 XY 对齐参考标线、标尺刻度与准星标记' : '已关闭 XY 对齐标线');
       });
     }
 
