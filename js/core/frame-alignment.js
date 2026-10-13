@@ -503,14 +503,14 @@ export class FrameAlignment {
     const isXZero = (curOx === 0);
     const isYZero = (curOy === 0);
 
-    // 1. 绘制世界基准 XY 参考标线与标尺刻度 (World Coordinate Axes & Ticks)
+    // 1. 绘制极简纯净的 XY 对齐参考线 (无任何遮挡身体或脚下的刻度与杂乱文字)
     if (showGround) {
       ctx.save();
 
-      // (1) 水平 Y 轴地面线 (贯穿全宽视口)
+      // (1) 水平 Y 轴地面基准线 (贯穿全宽视口)
       ctx.beginPath();
       ctx.lineWidth = isYZero ? 1.5 : 1;
-      ctx.strokeStyle = isYZero ? '#06d6a0' : 'rgba(58, 134, 255, 0.65)';
+      ctx.strokeStyle = isYZero ? '#06d6a0' : 'rgba(58, 134, 255, 0.45)';
       if (isYZero) {
         ctx.setLineDash([]);
       } else {
@@ -520,10 +520,10 @@ export class FrameAlignment {
       ctx.lineTo(width, targetBaseY);
       ctx.stroke();
 
-      // (2) 垂直 X 轴中轴线 (贯穿全高视口)
+      // (2) 垂直 X 轴中心线 (贯穿全高视口)
       ctx.beginPath();
       ctx.lineWidth = isXZero ? 1.5 : 1;
-      ctx.strokeStyle = isXZero ? '#06d6a0' : 'rgba(58, 134, 255, 0.65)';
+      ctx.strokeStyle = isXZero ? '#06d6a0' : 'rgba(58, 134, 255, 0.45)';
       if (isXZero) {
         ctx.setLineDash([]);
       } else {
@@ -533,82 +533,12 @@ export class FrameAlignment {
       ctx.lineTo(targetBaseX, height);
       ctx.stroke();
 
-      // (3) X 轴与 Y 轴像素刻度线 (以 20px / 50px 为间隔)
+      // (3) 世界基准原点 (0, 0) 极简中心微点
       ctx.setLineDash([]);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-      ctx.lineWidth = 1;
-      ctx.font = '9px monospace';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-
-      // X 轴刻度 (左右对称延伸)
-      const maxTicksX = Math.floor(width / (2 * 20 * scale));
-      for (let t = 1; t <= maxTicksX; t++) {
-        const tickPx = t * 20;
-        const tickScreenDist = tickPx * scale;
-        const isMajor = (tickPx % 50 === 0);
-        const tickH = isMajor ? 5 : 3;
-
-        // 右侧正刻度
-        const rx = targetBaseX + tickScreenDist;
-        if (rx < width - 12) {
-          ctx.beginPath();
-          ctx.moveTo(rx, targetBaseY - tickH);
-          ctx.lineTo(rx, targetBaseY + tickH);
-          ctx.stroke();
-          if (isMajor && tickScreenDist > 24) {
-            ctx.fillText(`+${tickPx}`, rx, targetBaseY + tickH + 2);
-          }
-        }
-
-        // 左侧负刻度
-        const lx = targetBaseX - tickScreenDist;
-        if (lx > 12) {
-          ctx.beginPath();
-          ctx.moveTo(lx, targetBaseY - tickH);
-          ctx.lineTo(lx, targetBaseY + tickH);
-          ctx.stroke();
-          if (isMajor && tickScreenDist > 24) {
-            ctx.fillText(`-${tickPx}`, lx, targetBaseY + tickH + 2);
-          }
-        }
-      }
-
-      // Y 轴刻度 (向上为负跳起，向下为正贴地沉入)
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      const maxTicksYUp = Math.floor(targetBaseY / (20 * scale));
-      for (let t = 1; t <= maxTicksYUp; t++) {
-        const tickPx = t * 20;
-        const tickScreenDist = tickPx * scale;
-        const isMajor = (tickPx % 50 === 0);
-        const tickW = isMajor ? 5 : 3;
-        const uy = targetBaseY - tickScreenDist;
-        if (uy > 12) {
-          ctx.beginPath();
-          ctx.moveTo(targetBaseX - tickW, uy);
-          ctx.lineTo(targetBaseX + tickW, uy);
-          ctx.stroke();
-          if (isMajor && tickScreenDist > 24) {
-            ctx.fillText(`-${tickPx}`, targetBaseX + tickW + 2, uy);
-          }
-        }
-      }
-
-      // (4) 世界基准原点 (0, 0) 靶心标记
-      ctx.strokeStyle = '#3a86ff';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(targetBaseX, targetBaseY, 4, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // 原点文字标签
-      ctx.font = '10px monospace';
       ctx.fillStyle = '#3a86ff';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText('(0,0)', targetBaseX + 6, targetBaseY + 6);
+      ctx.beginPath();
+      ctx.arc(targetBaseX, targetBaseY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.restore();
     }
@@ -640,133 +570,46 @@ export class FrameAlignment {
     }
     ctx.restore();
 
-    // 3.5 洋葱皮前后帧的参考定位标记 (对比前后帧脚底/锚点位置)
-    if (showOnion && showGround && allFrames.length > 1) {
-      const onionList = this.getOnionSkinFrames(allFrames, currentIndex, 1, 1);
-      onionList.forEach(item => {
-        const itemOx = item.frame.offset ? (item.frame.offset.x || 0) : 0;
-        const itemOy = item.frame.offset ? (item.frame.offset.y || 0) : 0;
-        const ix = targetBaseX + itemOx * scale;
-        const iy = targetBaseY + itemOy * scale;
-
-        ctx.save();
-        ctx.strokeStyle = item.color;
-        ctx.fillStyle = item.color;
-        ctx.globalAlpha = 0.65;
-        ctx.beginPath();
-        ctx.arc(ix, iy, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(ix - 5, iy);
-        ctx.lineTo(ix + 5, iy);
-        ctx.moveTo(ix, iy - 5);
-        ctx.lineTo(ix, iy + 5);
-        ctx.stroke();
-
-        ctx.font = '9px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(item.type === 'prev' ? '前帧' : '后帧', ix, iy + 4);
-        ctx.restore();
-      });
-    }
-
-    // 4. 绘制当前帧动态 XY 十字准星与正交偏移连线标注 (Current Frame Dynamic Reticle & Delta Markers)
+    // 4. 绘制当前帧极简十字准星与左上角清爽 HUD 坐标牌 (脚底彻底清爽，不遮挡任何画面)
     if (currentFrame && showPivot) {
       ctx.save();
 
       const fx = targetBaseX + curOx * scale;
       const fy = targetBaseY + curOy * scale;
 
-      // 如果存在非零偏移且开启了对齐标线，绘制从世界基准线到当前帧锚点的正交投影虚线和数值标注
-      if (showGround && (curOx !== 0 || curOy !== 0)) {
-        ctx.save();
-        ctx.setLineDash([3, 3]);
-        ctx.lineWidth = 1.2;
-
-        // 水平偏移投影线 (X 偏差)
-        if (curOx !== 0) {
-          ctx.strokeStyle = '#ffd166';
-          ctx.beginPath();
-          ctx.moveTo(targetBaseX, fy);
-          ctx.lineTo(fx, fy);
-          ctx.stroke();
-
-          // 水平偏移数值标签
-          const midX = (targetBaseX + fx) / 2;
-          const badgeText = `ΔX: ${curOx > 0 ? '+' : ''}${curOx}px`;
-          ctx.font = '10px monospace';
-          const txtW = ctx.measureText(badgeText).width;
-          ctx.fillStyle = 'rgba(20, 20, 28, 0.88)';
-          ctx.fillRect(midX - txtW / 2 - 3, fy - 16, txtW + 6, 13);
-          ctx.strokeStyle = '#ffd166';
-          ctx.strokeRect(midX - txtW / 2 - 3, fy - 16, txtW + 6, 13);
-          ctx.fillStyle = '#ffd166';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(badgeText, midX, fy - 9.5);
-        }
-
-        // 垂直偏移投影线 (Y 偏差)
-        if (curOy !== 0) {
-          ctx.strokeStyle = '#ff9e00';
-          ctx.beginPath();
-          ctx.moveTo(targetBaseX, targetBaseY);
-          ctx.lineTo(targetBaseX, fy);
-          ctx.stroke();
-
-          // 垂直偏移数值标签
-          const midY = (targetBaseY + fy) / 2;
-          const badgeText = `ΔY: ${curOy > 0 ? '+' : ''}${curOy}px`;
-          ctx.font = '10px monospace';
-          const txtW = ctx.measureText(badgeText).width;
-          const tagX = (curOx >= 0) ? (targetBaseX - txtW / 2 - 8) : (targetBaseX + txtW / 2 + 8);
-          ctx.fillStyle = 'rgba(20, 20, 28, 0.88)';
-          ctx.fillRect(tagX - txtW / 2 - 3, midY - 6.5, txtW + 6, 13);
-          ctx.strokeStyle = '#ff9e00';
-          ctx.strokeRect(tagX - txtW / 2 - 3, midY - 6.5, txtW + 6, 13);
-          ctx.fillStyle = '#ff9e00';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(badgeText, tagX, midY);
-        }
-
-        ctx.restore();
-      }
-
-      // 绘制当前帧锚点十字准星 (高亮荧光粉 / 若完美对齐归零则为亮绿)
+      // 绘制当前帧锚点极简准星 (高亮荧光粉 / 若完美对齐归零则为亮绿)
       const isPerfectAligned = (curOx === 0 && curOy === 0);
       const reticleColor = isPerfectAligned ? '#06d6a0' : '#ff006e';
 
-      // 准星外圆
+      // 准星外圆 (5px 紧凑小圆)
       ctx.strokeStyle = reticleColor;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(fx, fy, 6, 0, Math.PI * 2);
+      ctx.arc(fx, fy, 5, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 准星十字交叉线 (10px 臂长)
+      // 准星十字交叉丝 (8px 紧凑臂长)
       ctx.beginPath();
-      ctx.moveTo(fx - 10, fy);
-      ctx.lineTo(fx + 10, fy);
-      ctx.moveTo(fx, fy - 10);
-      ctx.lineTo(fx, fy + 10);
+      ctx.moveTo(fx - 8, fy);
+      ctx.lineTo(fx + 8, fy);
+      ctx.moveTo(fx, fy - 8);
+      ctx.lineTo(fx, fy + 8);
       ctx.stroke();
 
       // 准星中心白点
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(fx, fy, 2, 0, Math.PI * 2);
+      ctx.arc(fx, fy, 1.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // 在视口顶部左侧显示常驻/动态 HUD 对齐信息面板 (HUD Badge)
+      // 在视口左上角常驻清晰小巧的 HUD 对齐信息卡片 (完全不干扰脚下画面)
       if (showGround) {
         const hudX = 10;
         const hudY = 10;
-        const hudW = 150;
+        const hudW = 140;
         const hudH = 24;
 
-        ctx.fillStyle = 'rgba(15, 17, 26, 0.88)';
+        ctx.fillStyle = 'rgba(15, 17, 26, 0.85)';
         ctx.strokeStyle = isPerfectAligned ? '#06d6a0' : 'rgba(255, 255, 255, 0.15)';
         ctx.lineWidth = 1;
         if (typeof ctx.roundRect === 'function') {
@@ -784,18 +627,18 @@ export class FrameAlignment {
         ctx.textAlign = 'left';
 
         // X 指示
-        ctx.fillStyle = isXZero ? '#06d6a0' : '#ffd166';
+        ctx.fillStyle = isXZero ? '#06d6a0' : '#ffb703';
         const xStr = `X: ${curOx >= 0 ? '+' : ''}${curOx}`;
         ctx.fillText(xStr, hudX + 8, hudY + 12);
 
         // 分隔竖线
         ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.fillRect(hudX + 70, hudY + 4, 1, 16);
+        ctx.fillRect(hudX + 66, hudY + 4, 1, 16);
 
         // Y 指示
-        ctx.fillStyle = isYZero ? '#06d6a0' : '#ff9e00';
+        ctx.fillStyle = isYZero ? '#06d6a0' : '#ffb703';
         const yStr = `Y: ${curOy >= 0 ? '+' : ''}${curOy}`;
-        ctx.fillText(yStr, hudX + 80, hudY + 12);
+        ctx.fillText(yStr, hudX + 76, hudY + 12);
       }
 
       ctx.restore();
