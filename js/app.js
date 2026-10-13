@@ -868,35 +868,80 @@ class SpriteAnimatorApp {
       console.warn('[SpriteAnimator] 获取原图 ImageData 失败:', err);
     }
 
-    let alignedCount = 0;
-    for (const frame of targets) {
-      if (!frame || !frame.rect) continue;
-      let bounds = null;
-
-      // 若该帧已有橡皮擦/套索修整后的独立图层，优先扫描独立图层中的真实脚底与重心
+    const getFrameBounds = (frame) => {
+      if (!frame || !frame.rect) return null;
+      let b = null;
       if (frame.maskCanvas && typeof frame.maskCanvas.getContext === 'function') {
         try {
           const mctx = frame.maskCanvas.getContext('2d');
           const mData = mctx.getImageData(0, 0, frame.rect.w, frame.rect.h);
-          bounds = ImageProcessor.getRectContentBounds(
+          b = ImageProcessor.getRectContentBounds(
             mData,
             { x: 0, y: 0, w: frame.rect.w, h: frame.rect.h },
             { alphaThreshold: 15, tolerance: 25 }
           );
         } catch (e) {
-          bounds = null;
+          b = null;
         }
       }
-
-      if (!bounds && sourceImageData) {
-        bounds = ImageProcessor.getRectContentBounds(sourceImageData, frame.rect, {
+      if (!b && sourceImageData) {
+        b = ImageProcessor.getRectContentBounds(sourceImageData, frame.rect, {
           alphaThreshold: 15,
           tolerance: 25
         });
       }
+      return (b && !b.empty) ? b : null;
+    };
 
-      if (bounds && !bounds.empty) {
-        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX, alignY, xMode });
+    const boundsMap = new Map();
+    for (const f of frames) {
+      const b = getFrameBounds(f);
+      if (b) boundsMap.set(f.id, b);
+    }
+
+    // 计算 X 轴对齐的目标参考基准位置 referenceX：
+    // - 全部对齐时：取所有帧左脚(或重心)在各自选框内的平均位置，使所有帧就地对齐，绝不会把人物整体推向右侧导致刀光出画框！
+    // - 单帧对齐时：若存在前一帧，直接对齐到前一帧左脚(或重心)所在的实际水平位置！
+    let referenceX = undefined;
+    if (alignX) {
+      if (alignAll) {
+        let sumX = 0;
+        let cnt = 0;
+        for (const f of targets) {
+          const b = boundsMap.get(f.id);
+          if (!b) continue;
+          const val = (xMode === 'left-foot') ? b.leftFootX : b.bodyCenterX;
+          if (typeof val === 'number') {
+            sumX += val;
+            cnt++;
+          }
+        }
+        if (cnt > 0) referenceX = sumX / cnt;
+      } else if (targets.length === 1) {
+        const curFrame = targets[0];
+        const curIdx = frames.findIndex(f => f.id === curFrame.id);
+        if (curIdx > 0) {
+          const prevFrame = frames[curIdx - 1];
+          const prevB = boundsMap.get(prevFrame.id);
+          if (prevB) {
+            const prevLocalX = (xMode === 'left-foot') ? prevB.leftFootX : prevB.bodyCenterX;
+            const prevOx = prevFrame.offset?.x || 0;
+            referenceX = prevLocalX + prevOx;
+          }
+        }
+      }
+    }
+
+    let alignedCount = 0;
+    for (const frame of targets) {
+      const bounds = boundsMap.get(frame.id);
+      if (bounds) {
+        frameAlignment.autoAlignFrameToGround(frame, bounds, {
+          alignX,
+          alignY,
+          xMode,
+          referenceX
+        });
         alignedCount++;
       }
     }
@@ -910,13 +955,13 @@ class SpriteAnimatorApp {
 
     if (alignAll) {
       const modeDesc = alignX
-        ? (xMode === 'left-foot' ? '左脚锚点与地面线' : '角色中心与地面线')
+        ? (xMode === 'left-foot' ? '左脚基准与地面线' : '角色中心与地面线')
         : 'Y 轴脚底地面线';
-      const msg = `已完成全部 ${alignedCount} 帧 [${modeDesc}] 自动对齐！视口已自动居中完整显示刀光`;
+      const msg = `已完成全部 ${alignedCount} 帧 [${modeDesc}] 自动对齐！(拖拽预览画面仅平移位置，绝不改变大小)`;
       this.setStatus(msg);
-      this.showToast(`全部 ${alignedCount} 帧已按 [${modeDesc}] 自动对齐，刀光完整自适应！`, 'success');
+      this.showToast(`全部 ${alignedCount} 帧已按 [${modeDesc}] 原位对齐，刀光完整保留在画框内！`, 'success');
     } else if (selectedFrame) {
-      this.setStatus(`已自动对齐 [${selectedFrame.name}] (X偏移 = ${selectedFrame.offset?.x || 0}px, Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
+      this.setStatus(`已将 [${selectedFrame.name}] 对齐至基准位置 (X偏移 = ${selectedFrame.offset?.x || 0}px, Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
     }
   }
 

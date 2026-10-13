@@ -1016,7 +1016,7 @@ body {
         <div class="brand">
           <div class="brand-icon">⚡</div>
           <span>Sprite Animator</span>
-          <span class="badge-version">v1.8</span>
+          <span class="badge-version">v1.9</span>
         </div>
 
         <div class="toolbar-divider"></div>
@@ -4281,7 +4281,13 @@ class FrameAlignment {
       } else {
         targetLocalX = (bounds.localMinX + bounds.localMaxX + 1) / 2;
       }
-      frame.offset.x = Math.round(w * px - targetLocalX);
+
+      // 若外部指定了统一的参考基准 X (如全部帧左脚的平均局部 X)，则对齐到该基准，避免整体大幅偏心导致右侧刀光出框
+      const refX = (typeof options.referenceX === 'number')
+        ? options.referenceX
+        : (xMode === 'left-foot' ? w * 0.36 : w * px);
+
+      frame.offset.x = Math.round(refX - targetLocalX);
     }
 
     return { ...frame.offset };
@@ -4485,7 +4491,7 @@ class FrameAlignment {
   }
 
   /**
-   * 计算视口舞台的最佳缩放比 (自适应完整展示整个人物与武器/刀光，考虑 offset 与锚点跨度)
+   * 计算视口舞台的恒定缩放比 (严格仅取决于选框尺寸 rect.w / rect.h，拖拽改变 offset 时绝对不改变图片大小)
    * @param {number} canvasWidth 
    * @param {number} canvasHeight 
    * @param {Array<Object>} allFrames 
@@ -4502,9 +4508,18 @@ class FrameAlignment {
       if (!isNaN(parsed) && parsed > 0) return parsed;
     }
 
-    const bounds = this.calculateStageBounds(allFrames, currentFrame);
-    const maxW = bounds.spanW;
-    const maxH = bounds.spanH;
+    // 自适应 Auto Fit 逻辑：仅根据选框原始宽高计算恒定缩放比，拖拽 offset 时绝不放大缩小
+    let maxW = currentFrame?.rect?.w || 0;
+    let maxH = currentFrame?.rect?.h || 0;
+
+    if (Array.isArray(allFrames)) {
+      allFrames.forEach(f => {
+        if (f && f.rect) {
+          if (f.rect.w > maxW) maxW = f.rect.w;
+          if (f.rect.h > maxH) maxH = f.rect.h;
+        }
+      });
+    }
 
     if (maxW <= 0 || maxH <= 0) return 1.0;
 
@@ -4520,7 +4535,7 @@ class FrameAlignment {
   }
 
   /**
-   * 渲染对齐工作台/播放器视口 (包含洋葱皮、自适应缩放、地面参考线与锚点准星)
+   * 渲染对齐工作台/播放器视口 (包含洋葱皮、恒定缩放、地面参考线与锚点准星)
    * @param {HTMLCanvasElement} canvas 目标视口 Canvas
    * @param {Object|null} currentFrame 当前帧对象
    * @param {Array<Object>} allFrames 全部帧列表
@@ -4539,16 +4554,12 @@ class FrameAlignment {
     // 清空背景
     ctx.clearRect(0, 0, width, height);
 
-    // 计算联合包围盒与视口缩放比
-    const stageBounds = this.calculateStageBounds(allFrames, currentFrame);
-    const scale = this.calculateStageScale(width, height, allFrames, currentFrame, displayConfig.zoom);
-
-    // 动态计算水平基准坐标 targetBaseX：
-    // 当以左脚为锚点对齐时，角色身体与右侧大刀光均在锚点右侧 (minLeft + maxRight > 0)，
-    // 自动将基准锚点向左平移，使整个动作序列 [minLeft, maxRight] 100% 居中完整呈现在播放器视口中央，绝不出框！
-    const centerOffsetX = ((stageBounds.minLeft + stageBounds.maxRight) / 2) * scale;
-    const targetBaseX = Math.round(width / 2 - centerOffsetX);
+    // 固定地面与锚点基准坐标：水平居中，脚底基准线位于画布高 82% 处（拖拽人物时舞台与大小 100% 恒定不变）
+    const targetBaseX = Math.round(width / 2);
     const targetBaseY = Math.round(height * 0.82);
+
+    // 计算恒定视口缩放比
+    const scale = this.calculateStageScale(width, height, allFrames, currentFrame, displayConfig.zoom);
 
     this.lastRenderScale = scale;
     this.lastTargetBaseX = targetBaseX;
@@ -8153,35 +8164,80 @@ class SpriteAnimatorApp {
       console.warn('[SpriteAnimator] 获取原图 ImageData 失败:', err);
     }
 
-    let alignedCount = 0;
-    for (const frame of targets) {
-      if (!frame || !frame.rect) continue;
-      let bounds = null;
-
-      // 若该帧已有橡皮擦/套索修整后的独立图层，优先扫描独立图层中的真实脚底与重心
+    const getFrameBounds = (frame) => {
+      if (!frame || !frame.rect) return null;
+      let b = null;
       if (frame.maskCanvas && typeof frame.maskCanvas.getContext === 'function') {
         try {
           const mctx = frame.maskCanvas.getContext('2d');
           const mData = mctx.getImageData(0, 0, frame.rect.w, frame.rect.h);
-          bounds = ImageProcessor.getRectContentBounds(
+          b = ImageProcessor.getRectContentBounds(
             mData,
             { x: 0, y: 0, w: frame.rect.w, h: frame.rect.h },
             { alphaThreshold: 15, tolerance: 25 }
           );
         } catch (e) {
-          bounds = null;
+          b = null;
         }
       }
-
-      if (!bounds && sourceImageData) {
-        bounds = ImageProcessor.getRectContentBounds(sourceImageData, frame.rect, {
+      if (!b && sourceImageData) {
+        b = ImageProcessor.getRectContentBounds(sourceImageData, frame.rect, {
           alphaThreshold: 15,
           tolerance: 25
         });
       }
+      return (b && !b.empty) ? b : null;
+    };
 
-      if (bounds && !bounds.empty) {
-        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX, alignY, xMode });
+    const boundsMap = new Map();
+    for (const f of frames) {
+      const b = getFrameBounds(f);
+      if (b) boundsMap.set(f.id, b);
+    }
+
+    // 计算 X 轴对齐的目标参考基准位置 referenceX：
+    // - 全部对齐时：取所有帧左脚(或重心)在各自选框内的平均位置，使所有帧就地对齐，绝不会把人物整体推向右侧导致刀光出画框！
+    // - 单帧对齐时：若存在前一帧，直接对齐到前一帧左脚(或重心)所在的实际水平位置！
+    let referenceX = undefined;
+    if (alignX) {
+      if (alignAll) {
+        let sumX = 0;
+        let cnt = 0;
+        for (const f of targets) {
+          const b = boundsMap.get(f.id);
+          if (!b) continue;
+          const val = (xMode === 'left-foot') ? b.leftFootX : b.bodyCenterX;
+          if (typeof val === 'number') {
+            sumX += val;
+            cnt++;
+          }
+        }
+        if (cnt > 0) referenceX = sumX / cnt;
+      } else if (targets.length === 1) {
+        const curFrame = targets[0];
+        const curIdx = frames.findIndex(f => f.id === curFrame.id);
+        if (curIdx > 0) {
+          const prevFrame = frames[curIdx - 1];
+          const prevB = boundsMap.get(prevFrame.id);
+          if (prevB) {
+            const prevLocalX = (xMode === 'left-foot') ? prevB.leftFootX : prevB.bodyCenterX;
+            const prevOx = prevFrame.offset?.x || 0;
+            referenceX = prevLocalX + prevOx;
+          }
+        }
+      }
+    }
+
+    let alignedCount = 0;
+    for (const frame of targets) {
+      const bounds = boundsMap.get(frame.id);
+      if (bounds) {
+        frameAlignment.autoAlignFrameToGround(frame, bounds, {
+          alignX,
+          alignY,
+          xMode,
+          referenceX
+        });
         alignedCount++;
       }
     }
@@ -8195,13 +8251,13 @@ class SpriteAnimatorApp {
 
     if (alignAll) {
       const modeDesc = alignX
-        ? (xMode === 'left-foot' ? '左脚锚点与地面线' : '角色中心与地面线')
+        ? (xMode === 'left-foot' ? '左脚基准与地面线' : '角色中心与地面线')
         : 'Y 轴脚底地面线';
-      const msg = `已完成全部 ${alignedCount} 帧 [${modeDesc}] 自动对齐！视口已自动居中完整显示刀光`;
+      const msg = `已完成全部 ${alignedCount} 帧 [${modeDesc}] 自动对齐！(拖拽预览画面仅平移位置，绝不改变大小)`;
       this.setStatus(msg);
-      this.showToast(`全部 ${alignedCount} 帧已按 [${modeDesc}] 自动对齐，刀光完整自适应！`, 'success');
+      this.showToast(`全部 ${alignedCount} 帧已按 [${modeDesc}] 原位对齐，刀光完整保留在画框内！`, 'success');
     } else if (selectedFrame) {
-      this.setStatus(`已自动对齐 [${selectedFrame.name}] (X偏移 = ${selectedFrame.offset?.x || 0}px, Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
+      this.setStatus(`已将 [${selectedFrame.name}] 对齐至基准位置 (X偏移 = ${selectedFrame.offset?.x || 0}px, Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
     }
   }
 

@@ -210,7 +210,13 @@ export class FrameAlignment {
       } else {
         targetLocalX = (bounds.localMinX + bounds.localMaxX + 1) / 2;
       }
-      frame.offset.x = Math.round(w * px - targetLocalX);
+
+      // 若外部指定了统一的参考基准 X (如全部帧左脚的平均局部 X)，则对齐到该基准，避免整体大幅偏心导致右侧刀光出框
+      const refX = (typeof options.referenceX === 'number')
+        ? options.referenceX
+        : (xMode === 'left-foot' ? w * 0.36 : w * px);
+
+      frame.offset.x = Math.round(refX - targetLocalX);
     }
 
     return { ...frame.offset };
@@ -414,7 +420,7 @@ export class FrameAlignment {
   }
 
   /**
-   * 计算视口舞台的最佳缩放比 (自适应完整展示整个人物与武器/刀光，考虑 offset 与锚点跨度)
+   * 计算视口舞台的恒定缩放比 (严格仅取决于选框尺寸 rect.w / rect.h，拖拽改变 offset 时绝对不改变图片大小)
    * @param {number} canvasWidth 
    * @param {number} canvasHeight 
    * @param {Array<Object>} allFrames 
@@ -431,9 +437,18 @@ export class FrameAlignment {
       if (!isNaN(parsed) && parsed > 0) return parsed;
     }
 
-    const bounds = this.calculateStageBounds(allFrames, currentFrame);
-    const maxW = bounds.spanW;
-    const maxH = bounds.spanH;
+    // 自适应 Auto Fit 逻辑：仅根据选框原始宽高计算恒定缩放比，拖拽 offset 时绝不放大缩小
+    let maxW = currentFrame?.rect?.w || 0;
+    let maxH = currentFrame?.rect?.h || 0;
+
+    if (Array.isArray(allFrames)) {
+      allFrames.forEach(f => {
+        if (f && f.rect) {
+          if (f.rect.w > maxW) maxW = f.rect.w;
+          if (f.rect.h > maxH) maxH = f.rect.h;
+        }
+      });
+    }
 
     if (maxW <= 0 || maxH <= 0) return 1.0;
 
@@ -449,7 +464,7 @@ export class FrameAlignment {
   }
 
   /**
-   * 渲染对齐工作台/播放器视口 (包含洋葱皮、自适应缩放、地面参考线与锚点准星)
+   * 渲染对齐工作台/播放器视口 (包含洋葱皮、恒定缩放、地面参考线与锚点准星)
    * @param {HTMLCanvasElement} canvas 目标视口 Canvas
    * @param {Object|null} currentFrame 当前帧对象
    * @param {Array<Object>} allFrames 全部帧列表
@@ -468,16 +483,12 @@ export class FrameAlignment {
     // 清空背景
     ctx.clearRect(0, 0, width, height);
 
-    // 计算联合包围盒与视口缩放比
-    const stageBounds = this.calculateStageBounds(allFrames, currentFrame);
-    const scale = this.calculateStageScale(width, height, allFrames, currentFrame, displayConfig.zoom);
-
-    // 动态计算水平基准坐标 targetBaseX：
-    // 当以左脚为锚点对齐时，角色身体与右侧大刀光均在锚点右侧 (minLeft + maxRight > 0)，
-    // 自动将基准锚点向左平移，使整个动作序列 [minLeft, maxRight] 100% 居中完整呈现在播放器视口中央，绝不出框！
-    const centerOffsetX = ((stageBounds.minLeft + stageBounds.maxRight) / 2) * scale;
-    const targetBaseX = Math.round(width / 2 - centerOffsetX);
+    // 固定地面与锚点基准坐标：水平居中，脚底基准线位于画布高 82% 处（拖拽人物时舞台与大小 100% 恒定不变）
+    const targetBaseX = Math.round(width / 2);
     const targetBaseY = Math.round(height * 0.82);
+
+    // 计算恒定视口缩放比
+    const scale = this.calculateStageScale(width, height, allFrames, currentFrame, displayConfig.zoom);
 
     this.lastRenderScale = scale;
     this.lastTargetBaseX = targetBaseX;
