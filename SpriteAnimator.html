@@ -1016,7 +1016,7 @@ body {
         <div class="brand">
           <div class="brand-icon">⚡</div>
           <span>Sprite Animator</span>
-          <span class="badge-version">v1.6</span>
+          <span class="badge-version">v1.7</span>
         </div>
 
         <div class="toolbar-divider"></div>
@@ -1250,14 +1250,22 @@ body {
             </div>
 
             <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
-              <button class="btn btn-secondary btn-sm" id="btn-align-frame-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="自动扫描当前帧角色脚底最低像素，贴合到地面基准线">
-                ⏬ 当前帧贴地
+              <button class="btn btn-primary btn-sm" id="btn-align-all-xy" style="flex: 1.3; padding: 3px 6px; font-size: 11px;" title="一键自动按角色躯干重心对齐X轴（排除白色刀光干扰）+ 按真实脚底对齐Y轴地面线">
+                🎯 全部XY自动对齐
               </button>
-              <button class="btn btn-primary btn-sm" id="btn-align-all-ground" style="flex: 1.2; padding: 3px 6px; font-size: 11px;" title="一键扫描全部动作帧角色脚底，自动统一对齐到地面基准线">
-                🎯 全部Y轴贴地
+              <button class="btn btn-secondary btn-sm" id="btn-align-all-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="仅对齐全部帧的Y轴脚底地面线（保留现有X轴）">
+                ⏬ 全部Y贴地
               </button>
               <button class="btn btn-secondary btn-sm" id="btn-reset-offset" style="padding: 3px 6px; font-size: 11px;" title="将当前帧 X/Y 偏移量重置归零">
                 ↺ 归零
+              </button>
+            </div>
+            <div class="control-row" style="margin-top: 4px; display: flex; gap: 4px;">
+              <button class="btn btn-secondary btn-sm" id="btn-align-frame-x" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="自动识别当前帧角色躯干重心（排除白色刀光）并居中对齐X轴">
+                ↔ 当前帧X居中
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-align-frame-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="自动扫描当前帧角色脚底最低像素，贴合到地面基准线">
+                ⏬ 当前帧Y贴地
               </button>
             </div>
 
@@ -3083,11 +3091,19 @@ class ImageProcessor {
     let localMinY = actualH;
     let localMaxY = -1;
 
+    let allSumX = 0;
+    let allCount = 0;
+    let bodySumX = 0;
+    let bodyCount = 0;
+
     for (let py = startY; py < endY; py++) {
       const rowOffset = py * imgW;
       const ly = py - startY;
       for (let px = startX; px < endX; px++) {
         const pOffset = (rowOffset + px) * 4;
+        const r = data[pOffset];
+        const g = data[pOffset + 1];
+        const b = data[pOffset + 2];
         const a = data[pOffset + 3];
         let isForeground = false;
 
@@ -3097,9 +3113,9 @@ class ImageProcessor {
           if (a <= alphaThreshold) {
             isForeground = false;
           } else {
-            const dr = Math.abs(data[pOffset] - bgR);
-            const dg = Math.abs(data[pOffset + 1] - bgG);
-            const db = Math.abs(data[pOffset + 2] - bgB);
+            const dr = Math.abs(r - bgR);
+            const dg = Math.abs(g - bgG);
+            const db = Math.abs(b - bgB);
             isForeground = (dr > tolerance || dg > tolerance || db > tolerance);
           }
         }
@@ -3110,15 +3126,33 @@ class ImageProcessor {
           if (lx > localMaxX) localMaxX = lx;
           if (ly < localMinY) localMinY = ly;
           if (ly > localMaxY) localMaxY = ly;
+
+          allSumX += lx + 0.5;
+          allCount++;
+
+          // 判断是否为高亮纯白/灰白刀光特效像素 (RGB 均大于 210 且饱和度极低)
+          const maxC = Math.max(r, g, b);
+          const minC = Math.min(r, g, b);
+          const isWhiteSlashEffect = (r > 210 && g > 210 && b > 210 && (maxC - minC) < 35);
+          if (!isWhiteSlashEffect) {
+            bodySumX += lx + 0.5;
+            bodyCount++;
+          }
         }
       }
     }
 
-    if (localMaxX < 0 || localMaxY < 0) {
+    if (localMaxX < 0 || localMaxY < 0 || allCount === 0) {
       return null;
     }
 
+    const boxCenterX = (localMinX + localMaxX + 1) / 2;
+    const massCenterX = allSumX / allCount;
+    // 若非白色角色本体像素占比充足 (>10%)，优先使用排除刀光后的角色本体重心
+    const bodyCenterX = (bodyCount > allCount * 0.10) ? (bodySumX / bodyCount) : massCenterX;
+
     return {
+      empty: false,
       localMinX,
       localMaxX,
       localMinY,
@@ -3128,7 +3162,10 @@ class ImageProcessor {
       leftGap: localMinX,
       rightGap: actualW - 1 - localMaxX,
       contentW: localMaxX - localMinX + 1,
-      contentH: localMaxY - localMinY + 1
+      contentH: localMaxY - localMinY + 1,
+      boxCenterX,
+      massCenterX,
+      bodyCenterX
     };
   }
 }
@@ -4154,10 +4191,11 @@ class FrameAlignment {
 
   /**
    * 根据检测到的角色真实内容边界，自动计算并设置帧的 offset.y（及可选 offset.x），
-   * 使角色真实最低点（脚底）精准贴合到地面基准线 targetBaseY
+   * 使角色真实最低点（脚底）精准贴合到地面基准线 targetBaseY，
+   * 使角色本体重心（排除白色刀光干扰）精准对齐水平基准中心 targetBaseX
    * @param {Object} frame 帧对象
-   * @param {{ localMinX: number, localMaxX: number, localMinY: number, localMaxY: number }} bounds 角色真实像素边界
-   * @param {{ alignX?: boolean }} [options={}]
+   * @param {{ localMinX: number, localMaxX: number, localMinY: number, localMaxY: number, bodyCenterX?: number }} bounds 角色真实像素边界
+   * @param {{ alignX?: boolean, alignY?: boolean }} [options={}]
    * @returns {{ x: number, y: number }} 更新后的 offset
    */
   autoAlignFrameToGround(frame, bounds, options = {}) {
@@ -4173,14 +4211,16 @@ class FrameAlignment {
     const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
     const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
 
-    // 角色真实最低点在局部框内的底部坐标为 bounds.localMaxY + 1
-    // 渲染时 dy = targetBaseY - h * py + offset.y
-    // 要使角色脚底 dy + (bounds.localMaxY + 1) === targetBaseY，则：
-    // offset.y = h * py - (bounds.localMaxY + 1)
-    frame.offset.y = Math.round(h * py - (bounds.localMaxY + 1));
+    if (options.alignY !== false) {
+      // 角色真实最低点在局部框内的底部坐标为 bounds.localMaxY + 1
+      frame.offset.y = Math.round(h * py - (bounds.localMaxY + 1));
+    }
 
     if (options.alignX) {
-      const contentCenterX = (bounds.localMinX + bounds.localMaxX + 1) / 2;
+      // 优先采用排除白色刀光特效后的角色本体水平重心 bodyCenterX
+      const contentCenterX = (typeof bounds.bodyCenterX === 'number')
+        ? bounds.bodyCenterX
+        : (bounds.localMinX + bounds.localMaxX + 1) / 2;
       frame.offset.x = Math.round(w * px - contentCenterX);
     }
 
@@ -7222,6 +7262,8 @@ class SpriteAnimatorApp {
     this.pivotDots = document.querySelectorAll('.pivot-dot');
     this.offsetXInput = document.getElementById('offset-x');
     this.offsetYInput = document.getElementById('offset-y');
+    this.btnAlignAllXY = document.getElementById('btn-align-all-xy');
+    this.btnAlignFrameX = document.getElementById('btn-align-frame-x');
     this.btnAlignFrameGround = document.getElementById('btn-align-frame-ground');
     this.btnAlignAllGround = document.getElementById('btn-align-all-ground');
     this.btnResetOffset = document.getElementById('btn-reset-offset');
@@ -7873,15 +7915,25 @@ class SpriteAnimatorApp {
       this.offsetYInput.addEventListener('change', handleOffsetChange);
     }
 
-    // 2.5 自动脚底贴地与归零快捷按钮
-    if (this.btnAlignFrameGround) {
-      this.btnAlignFrameGround.addEventListener('click', () => {
-        this.handleAutoAlignGround(false);
+    // 2.5 自动脚底贴地、X轴角色重心对齐与归零快捷按钮
+    if (this.btnAlignAllXY) {
+      this.btnAlignAllXY.addEventListener('click', () => {
+        this.handleAutoAlignGround(true, { alignX: true, alignY: true });
       });
     }
     if (this.btnAlignAllGround) {
       this.btnAlignAllGround.addEventListener('click', () => {
-        this.handleAutoAlignGround(true);
+        this.handleAutoAlignGround(true, { alignX: false, alignY: true });
+      });
+    }
+    if (this.btnAlignFrameX) {
+      this.btnAlignFrameX.addEventListener('click', () => {
+        this.handleAutoAlignGround(false, { alignX: true, alignY: false });
+      });
+    }
+    if (this.btnAlignFrameGround) {
+      this.btnAlignFrameGround.addEventListener('click', () => {
+        this.handleAutoAlignGround(false, { alignX: false, alignY: true });
       });
     }
     if (this.btnResetOffset) {
@@ -7923,16 +7975,21 @@ class SpriteAnimatorApp {
   }
 
   /**
-   * 自动扫描角色真实前景像素最低点（脚底），自动补偿 offset.y 使脚底精准贴合地面基准线
+   * 自动扫描角色真实前景像素最低点（脚底）与角色躯干水平重心（排除白色刀光干扰），
+   * 自动补偿 offset.x / offset.y 使各帧角色水平重心与地面线精准对齐
    * @param {boolean} alignAll - true: 一键对齐全部动作帧; false: 仅对齐当前选中帧
+   * @param {{ alignX?: boolean, alignY?: boolean }} [opts={ alignX: false, alignY: true }]
    */
-  handleAutoAlignGround(alignAll = false) {
+  handleAutoAlignGround(alignAll = false, opts = {}) {
     const sourceImage = state.get('sourceImage');
     const frames = state.get('frames') || [];
     if (!sourceImage || frames.length === 0) {
       this.setStatus('请先导入图像并生成动作选框');
       return;
     }
+
+    const alignX = opts.alignX === true;
+    const alignY = opts.alignY !== false;
 
     const targets = alignAll ? frames : [state.getSelectedFrame()].filter(Boolean);
     if (targets.length === 0) {
@@ -7952,7 +8009,7 @@ class SpriteAnimatorApp {
       if (!frame || !frame.rect) continue;
       let bounds = null;
 
-      // 若该帧已有橡皮擦/套索修整后的独立图层，优先扫描独立图层中的真实脚底
+      // 若该帧已有橡皮擦/套索修整后的独立图层，优先扫描独立图层中的真实脚底与重心
       if (frame.maskCanvas && typeof frame.maskCanvas.getContext === 'function') {
         try {
           const mctx = frame.maskCanvas.getContext('2d');
@@ -7975,7 +8032,7 @@ class SpriteAnimatorApp {
       }
 
       if (bounds && !bounds.empty) {
-        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX: false });
+        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX, alignY });
         alignedCount++;
       }
     }
@@ -7988,11 +8045,12 @@ class SpriteAnimatorApp {
     this.renderPlayerViewport();
 
     if (alignAll) {
-      const msg = `已完成全部 ${alignedCount} 帧 Y 轴自动贴地对齐！(若有跳跃腾空帧，可在播放器中直接按住人物向上拖拽调高)`;
+      const modeDesc = (alignX && alignY) ? 'X 轴角色重心与 Y 轴脚底地面线' : 'Y 轴脚底地面线';
+      const msg = `已完成全部 ${alignedCount} 帧 ${modeDesc}自动对齐！(可在播放器中直接按住人物拖拽微调单帧)`;
       this.setStatus(msg);
-      this.showToast(`全部 ${alignedCount} 帧角色脚底已自动对齐地面线！跳跃帧可在播放器中直接往上拖高`, 'success');
+      this.showToast(`全部 ${alignedCount} 帧已自动完成 ${modeDesc}对齐！`, 'success');
     } else if (selectedFrame) {
-      this.setStatus(`已将 [${selectedFrame.name}] 角色脚底自动贴合地面线 (Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
+      this.setStatus(`已自动对齐 [${selectedFrame.name}] (X偏移 = ${selectedFrame.offset?.x || 0}px, Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
     }
   }
 

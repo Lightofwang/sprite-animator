@@ -542,11 +542,19 @@ export class ImageProcessor {
     let localMinY = actualH;
     let localMaxY = -1;
 
+    let allSumX = 0;
+    let allCount = 0;
+    let bodySumX = 0;
+    let bodyCount = 0;
+
     for (let py = startY; py < endY; py++) {
       const rowOffset = py * imgW;
       const ly = py - startY;
       for (let px = startX; px < endX; px++) {
         const pOffset = (rowOffset + px) * 4;
+        const r = data[pOffset];
+        const g = data[pOffset + 1];
+        const b = data[pOffset + 2];
         const a = data[pOffset + 3];
         let isForeground = false;
 
@@ -556,9 +564,9 @@ export class ImageProcessor {
           if (a <= alphaThreshold) {
             isForeground = false;
           } else {
-            const dr = Math.abs(data[pOffset] - bgR);
-            const dg = Math.abs(data[pOffset + 1] - bgG);
-            const db = Math.abs(data[pOffset + 2] - bgB);
+            const dr = Math.abs(r - bgR);
+            const dg = Math.abs(g - bgG);
+            const db = Math.abs(b - bgB);
             isForeground = (dr > tolerance || dg > tolerance || db > tolerance);
           }
         }
@@ -569,15 +577,33 @@ export class ImageProcessor {
           if (lx > localMaxX) localMaxX = lx;
           if (ly < localMinY) localMinY = ly;
           if (ly > localMaxY) localMaxY = ly;
+
+          allSumX += lx + 0.5;
+          allCount++;
+
+          // 判断是否为高亮纯白/灰白刀光特效像素 (RGB 均大于 210 且饱和度极低)
+          const maxC = Math.max(r, g, b);
+          const minC = Math.min(r, g, b);
+          const isWhiteSlashEffect = (r > 210 && g > 210 && b > 210 && (maxC - minC) < 35);
+          if (!isWhiteSlashEffect) {
+            bodySumX += lx + 0.5;
+            bodyCount++;
+          }
         }
       }
     }
 
-    if (localMaxX < 0 || localMaxY < 0) {
+    if (localMaxX < 0 || localMaxY < 0 || allCount === 0) {
       return null;
     }
 
+    const boxCenterX = (localMinX + localMaxX + 1) / 2;
+    const massCenterX = allSumX / allCount;
+    // 若非白色角色本体像素占比充足 (>10%)，优先使用排除刀光后的角色本体重心
+    const bodyCenterX = (bodyCount > allCount * 0.10) ? (bodySumX / bodyCount) : massCenterX;
+
     return {
+      empty: false,
       localMinX,
       localMaxX,
       localMinY,
@@ -587,7 +613,10 @@ export class ImageProcessor {
       leftGap: localMinX,
       rightGap: actualW - 1 - localMaxX,
       contentW: localMaxX - localMinX + 1,
-      contentH: localMaxY - localMinY + 1
+      contentH: localMaxY - localMinY + 1,
+      boxCenterX,
+      massCenterX,
+      bodyCenterX
     };
   }
 }

@@ -173,10 +173,11 @@ export class FrameAlignment {
 
   /**
    * 根据检测到的角色真实内容边界，自动计算并设置帧的 offset.y（及可选 offset.x），
-   * 使角色真实最低点（脚底）精准贴合到地面基准线 targetBaseY
+   * 使角色真实最低点（脚底）精准贴合到地面基准线 targetBaseY，
+   * 使角色本体重心（排除白色刀光干扰）精准对齐水平基准中心 targetBaseX
    * @param {Object} frame 帧对象
-   * @param {{ localMinX: number, localMaxX: number, localMinY: number, localMaxY: number }} bounds 角色真实像素边界
-   * @param {{ alignX?: boolean }} [options={}]
+   * @param {{ localMinX: number, localMaxX: number, localMinY: number, localMaxY: number, bodyCenterX?: number }} bounds 角色真实像素边界
+   * @param {{ alignX?: boolean, alignY?: boolean }} [options={}]
    * @returns {{ x: number, y: number }} 更新后的 offset
    */
   autoAlignFrameToGround(frame, bounds, options = {}) {
@@ -192,14 +193,16 @@ export class FrameAlignment {
     const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
     const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
 
-    // 角色真实最低点在局部框内的底部坐标为 bounds.localMaxY + 1
-    // 渲染时 dy = targetBaseY - h * py + offset.y
-    // 要使角色脚底 dy + (bounds.localMaxY + 1) === targetBaseY，则：
-    // offset.y = h * py - (bounds.localMaxY + 1)
-    frame.offset.y = Math.round(h * py - (bounds.localMaxY + 1));
+    if (options.alignY !== false) {
+      // 角色真实最低点在局部框内的底部坐标为 bounds.localMaxY + 1
+      frame.offset.y = Math.round(h * py - (bounds.localMaxY + 1));
+    }
 
     if (options.alignX) {
-      const contentCenterX = (bounds.localMinX + bounds.localMaxX + 1) / 2;
+      // 优先采用排除白色刀光特效后的角色本体水平重心 bodyCenterX
+      const contentCenterX = (typeof bounds.bodyCenterX === 'number')
+        ? bounds.bodyCenterX
+        : (bounds.localMinX + bounds.localMaxX + 1) / 2;
       frame.offset.x = Math.round(w * px - contentCenterX);
     }
 

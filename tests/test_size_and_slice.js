@@ -207,6 +207,61 @@ it('当角色画在格子偏上方（脚底离选框底边有 100px 透明空白
   assert.strictEqual(renderedFootBottomY, 400, '渲染后角色真实脚底与地面基准线 targetBaseY (400) 严丝合缝重合');
 });
 
+it('当某帧右侧有巨大白色刀光而另一帧无刀光时，alignX 自动排除白色刀光干扰，使两帧角色本体 X 轴完全对齐', () => {
+  const W = 400, H = 200;
+  // 帧 8：角色本体在 x=[60, 140] (中心 100.5)，但右侧 x=[141, 360] 有大面积纯白色刀光 (250, 250, 250)
+  const data8 = new Uint8ClampedArray(W * H * 4);
+  for (let y = 50; y <= 150; y++) {
+    for (let x = 60; x <= 140; x++) {
+      const idx = (y * W + x) * 4;
+      data8[idx] = 200;     // 红甲武将本体
+      data8[idx + 1] = 40;
+      data8[idx + 2] = 40;
+      data8[idx + 3] = 255;
+    }
+    for (let x = 141; x <= 360; x++) {
+      const idx = (y * W + x) * 4;
+      data8[idx] = 250;     // 纯白刀光特效
+      data8[idx + 1] = 250;
+      data8[idx + 2] = 252;
+      data8[idx + 3] = 255;
+    }
+  }
+
+  // 帧 9：刀光消失，角色本体在 x=[160, 240] (被居中到了偏右位置，中心 200.5)
+  const data9 = new Uint8ClampedArray(W * H * 4);
+  for (let y = 50; y <= 150; y++) {
+    for (let x = 160; x <= 240; x++) {
+      const idx = (y * W + x) * 4;
+      data9[idx] = 200;     // 红甲武将本体
+      data9[idx + 1] = 40;
+      data9[idx + 2] = 40;
+      data9[idx + 3] = 255;
+    }
+  }
+
+  const rect = { x: 0, y: 0, w: W, h: H };
+  const bounds8 = ImageProcessor.getRectContentBounds({ width: W, height: H, data: data8 }, rect);
+  const bounds9 = ImageProcessor.getRectContentBounds({ width: W, height: H, data: data9 }, rect);
+
+  assert.strictEqual(Math.round(bounds8.bodyCenterX), 101, '帧8 排除白色刀光后角色本体重心在 x≈100.5');
+  assert.strictEqual(Math.round(bounds9.bodyCenterX), 201, '帧9 无刀光角色本体重心在 x≈200.5');
+
+  const frame8 = { id: 'f8', rect, pivot: { x: 0.5, y: 1.0 }, offset: { x: 0, y: 0 } };
+  const frame9 = { id: 'f9', rect, pivot: { x: 0.5, y: 1.0 }, offset: { x: 0, y: 0 } };
+
+  alignment.autoAlignFrameToGround(frame8, bounds8, { alignX: true, alignY: true });
+  alignment.autoAlignFrameToGround(frame9, bounds9, { alignX: true, alignY: true });
+
+  // 渲染到舞台中心 targetBaseX = 300 时，检查两帧中武将本体的实际屏幕 X 坐标是否完全重合
+  const pos8 = alignment.calculateWorldRenderPos(frame8, 300, 300);
+  const pos9 = alignment.calculateWorldRenderPos(frame9, 300, 300);
+  const bodyWorldX8 = pos8.dx + bounds8.bodyCenterX;
+  const bodyWorldX9 = pos9.dx + bounds9.bodyCenterX;
+
+  assert(Math.abs(bodyWorldX8 - bodyWorldX9) <= 1, `对齐后帧8与帧9的武将本体世界X坐标完全重合 (${bodyWorldX8} vs ${bodyWorldX9})`);
+});
+
 console.log('\n======================================================');
 console.log(`📊 测试汇总: 共通过 ${passCount} 项, 失败 ${failCount} 项`);
 console.log('======================================================\n');

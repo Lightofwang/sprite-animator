@@ -119,6 +119,8 @@ class SpriteAnimatorApp {
     this.pivotDots = document.querySelectorAll('.pivot-dot');
     this.offsetXInput = document.getElementById('offset-x');
     this.offsetYInput = document.getElementById('offset-y');
+    this.btnAlignAllXY = document.getElementById('btn-align-all-xy');
+    this.btnAlignFrameX = document.getElementById('btn-align-frame-x');
     this.btnAlignFrameGround = document.getElementById('btn-align-frame-ground');
     this.btnAlignAllGround = document.getElementById('btn-align-all-ground');
     this.btnResetOffset = document.getElementById('btn-reset-offset');
@@ -770,15 +772,25 @@ class SpriteAnimatorApp {
       this.offsetYInput.addEventListener('change', handleOffsetChange);
     }
 
-    // 2.5 自动脚底贴地与归零快捷按钮
-    if (this.btnAlignFrameGround) {
-      this.btnAlignFrameGround.addEventListener('click', () => {
-        this.handleAutoAlignGround(false);
+    // 2.5 自动脚底贴地、X轴角色重心对齐与归零快捷按钮
+    if (this.btnAlignAllXY) {
+      this.btnAlignAllXY.addEventListener('click', () => {
+        this.handleAutoAlignGround(true, { alignX: true, alignY: true });
       });
     }
     if (this.btnAlignAllGround) {
       this.btnAlignAllGround.addEventListener('click', () => {
-        this.handleAutoAlignGround(true);
+        this.handleAutoAlignGround(true, { alignX: false, alignY: true });
+      });
+    }
+    if (this.btnAlignFrameX) {
+      this.btnAlignFrameX.addEventListener('click', () => {
+        this.handleAutoAlignGround(false, { alignX: true, alignY: false });
+      });
+    }
+    if (this.btnAlignFrameGround) {
+      this.btnAlignFrameGround.addEventListener('click', () => {
+        this.handleAutoAlignGround(false, { alignX: false, alignY: true });
       });
     }
     if (this.btnResetOffset) {
@@ -820,16 +832,21 @@ class SpriteAnimatorApp {
   }
 
   /**
-   * 自动扫描角色真实前景像素最低点（脚底），自动补偿 offset.y 使脚底精准贴合地面基准线
+   * 自动扫描角色真实前景像素最低点（脚底）与角色躯干水平重心（排除白色刀光干扰），
+   * 自动补偿 offset.x / offset.y 使各帧角色水平重心与地面线精准对齐
    * @param {boolean} alignAll - true: 一键对齐全部动作帧; false: 仅对齐当前选中帧
+   * @param {{ alignX?: boolean, alignY?: boolean }} [opts={ alignX: false, alignY: true }]
    */
-  handleAutoAlignGround(alignAll = false) {
+  handleAutoAlignGround(alignAll = false, opts = {}) {
     const sourceImage = state.get('sourceImage');
     const frames = state.get('frames') || [];
     if (!sourceImage || frames.length === 0) {
       this.setStatus('请先导入图像并生成动作选框');
       return;
     }
+
+    const alignX = opts.alignX === true;
+    const alignY = opts.alignY !== false;
 
     const targets = alignAll ? frames : [state.getSelectedFrame()].filter(Boolean);
     if (targets.length === 0) {
@@ -849,7 +866,7 @@ class SpriteAnimatorApp {
       if (!frame || !frame.rect) continue;
       let bounds = null;
 
-      // 若该帧已有橡皮擦/套索修整后的独立图层，优先扫描独立图层中的真实脚底
+      // 若该帧已有橡皮擦/套索修整后的独立图层，优先扫描独立图层中的真实脚底与重心
       if (frame.maskCanvas && typeof frame.maskCanvas.getContext === 'function') {
         try {
           const mctx = frame.maskCanvas.getContext('2d');
@@ -872,7 +889,7 @@ class SpriteAnimatorApp {
       }
 
       if (bounds && !bounds.empty) {
-        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX: false });
+        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX, alignY });
         alignedCount++;
       }
     }
@@ -885,11 +902,12 @@ class SpriteAnimatorApp {
     this.renderPlayerViewport();
 
     if (alignAll) {
-      const msg = `已完成全部 ${alignedCount} 帧 Y 轴自动贴地对齐！(若有跳跃腾空帧，可在播放器中直接按住人物向上拖拽调高)`;
+      const modeDesc = (alignX && alignY) ? 'X 轴角色重心与 Y 轴脚底地面线' : 'Y 轴脚底地面线';
+      const msg = `已完成全部 ${alignedCount} 帧 ${modeDesc}自动对齐！(可在播放器中直接按住人物拖拽微调单帧)`;
       this.setStatus(msg);
-      this.showToast(`全部 ${alignedCount} 帧角色脚底已自动对齐地面线！跳跃帧可在播放器中直接往上拖高`, 'success');
+      this.showToast(`全部 ${alignedCount} 帧已自动完成 ${modeDesc}对齐！`, 'success');
     } else if (selectedFrame) {
-      this.setStatus(`已将 [${selectedFrame.name}] 角色脚底自动贴合地面线 (Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
+      this.setStatus(`已自动对齐 [${selectedFrame.name}] (X偏移 = ${selectedFrame.offset?.x || 0}px, Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
     }
   }
 
