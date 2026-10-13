@@ -92,6 +92,11 @@ js/
    * 位于 `js/core/overlap-isolator.js`；
    * 修改某帧时优先初始化专属离屏 `maskCanvas`，使用 `destination-out` 执行局部像素擦除，绝不污染原始大图；
    * 维护独立的 `undoStack` 与 `redoStack`，最多保留 20 步快照。
+5. **真实脚底像素扫描与自动 Y 轴贴地 (`getRectContentBounds` & `autoAlignFrameToGround`)**：
+   * 位于 `js/core/image-processor.js` 与 `js/core/frame-alignment.js`；
+   * AI 生成的精灵表中，若某几帧头顶有巨大刀光/特效，人物往往被画在格子偏上方，导致脚底离网格底边留有不等的透明空白（播放时人物往上飘）；
+   * `getRectContentBounds` 自动扫描选框内前景像素最低点 `localMaxY`，`autoAlignFrameToGround` 自动计算 `frame.offset.y = Math.round(h * py - (localMaxY + 1))`，一键将全部地面帧的角色脚底贴合到地面基准线；
+   * 支持在右下角播放器画布（`#player-canvas`）中直接用鼠标按住人物上下左右拖拽微调 `offset.x / offset.y`（方便把跳跃帧单独往上拖回空中），且导出新精灵表与 ZIP 时自动烘焙该偏移。
 
 ---
 

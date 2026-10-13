@@ -13,9 +13,12 @@ import { Exporter } from './core/exporter.js';
 
 class SpriteAnimatorApp {
   constructor() {
-    // 准星拖拽交互状态
+    // 准星与画面偏移拖拽交互状态
     this.isDraggingPivot = false;
+    this.isDraggingOffset = false;
     this.pivotDragOrigin = null;
+    this.offsetDragStartMouse = null;
+    this.offsetDragInitial = null;
     this.draggedFrame = null;
 
     this.initElements();
@@ -108,6 +111,7 @@ class SpriteAnimatorApp {
     this.gridColsInput = document.getElementById('grid-cols-input');
     this.gridSliceSummary = document.getElementById('grid-slice-summary');
     this.gridFilterEmpty = document.getElementById('grid-filter-empty');
+    this.gridAutoAlignY = document.getElementById('grid-auto-align-y');
     this.gridPresetBtns = document.querySelectorAll('.grid-preset-btn');
 
     // 锚点与对齐控制
@@ -115,6 +119,9 @@ class SpriteAnimatorApp {
     this.pivotDots = document.querySelectorAll('.pivot-dot');
     this.offsetXInput = document.getElementById('offset-x');
     this.offsetYInput = document.getElementById('offset-y');
+    this.btnAlignFrameGround = document.getElementById('btn-align-frame-ground');
+    this.btnAlignAllGround = document.getElementById('btn-align-all-ground');
+    this.btnResetOffset = document.getElementById('btn-reset-offset');
     this.onionSkinToggle = document.getElementById('onion-skin-toggle');
     this.groundLineToggle = document.getElementById('ground-line-toggle');
 
@@ -763,6 +770,33 @@ class SpriteAnimatorApp {
       this.offsetYInput.addEventListener('change', handleOffsetChange);
     }
 
+    // 2.5 自动脚底贴地与归零快捷按钮
+    if (this.btnAlignFrameGround) {
+      this.btnAlignFrameGround.addEventListener('click', () => {
+        this.handleAutoAlignGround(false);
+      });
+    }
+    if (this.btnAlignAllGround) {
+      this.btnAlignAllGround.addEventListener('click', () => {
+        this.handleAutoAlignGround(true);
+      });
+    }
+    if (this.btnResetOffset) {
+      this.btnResetOffset.addEventListener('click', () => {
+        const selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) {
+          this.setStatus('请先选择一个动作帧');
+          return;
+        }
+        frameAlignment.resetOffset(selectedFrame);
+        state.updateFrame(selectedFrame.id, { offset: { x: 0, y: 0 } });
+        this.updateOffsetUI(selectedFrame);
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.setStatus(`已将 [${selectedFrame.name}] 的偏移量归零 (0, 0)`);
+      });
+    }
+
     // 3. 洋葱皮开关联动
     if (this.onionSkinToggle) {
       this.onionSkinToggle.addEventListener('change', (e) => {
@@ -781,36 +815,126 @@ class SpriteAnimatorApp {
       });
     }
 
-    // 5. 帧视口 (playerCanvas) 红色十字准星拖拽调整锚点交互
+    // 5. 帧视口 (playerCanvas) 红色十字准星拖拽与角色画面直接拖拽调整偏移交互
     this.bindPlayerCanvasPivotDrag();
   }
 
   /**
-   * 绑定帧视口 (playerCanvas) 红色十字准星拖拽调整锚点交互
-   * 支持准星 10px 悬停光标感知、拖拽反推帧内像素坐标与实时重绘联动
+   * 自动扫描角色真实前景像素最低点（脚底），自动补偿 offset.y 使脚底精准贴合地面基准线
+   * @param {boolean} alignAll - true: 一键对齐全部动作帧; false: 仅对齐当前选中帧
+   */
+  handleAutoAlignGround(alignAll = false) {
+    const sourceImage = state.get('sourceImage');
+    const frames = state.get('frames') || [];
+    if (!sourceImage || frames.length === 0) {
+      this.setStatus('请先导入图像并生成动作选框');
+      return;
+    }
+
+    const targets = alignAll ? frames : [state.getSelectedFrame()].filter(Boolean);
+    if (targets.length === 0) {
+      this.setStatus('请先选择一个动作帧');
+      return;
+    }
+
+    let sourceImageData = null;
+    try {
+      sourceImageData = ImageProcessor.getImageDataFromImage(sourceImage);
+    } catch (err) {
+      console.warn('[SpriteAnimator] 获取原图 ImageData 失败:', err);
+    }
+
+    let alignedCount = 0;
+    for (const frame of targets) {
+      if (!frame || !frame.rect) continue;
+      let bounds = null;
+
+      // 若该帧已有橡皮擦/套索修整后的独立图层，优先扫描独立图层中的真实脚底
+      if (frame.maskCanvas && typeof frame.maskCanvas.getContext === 'function') {
+        try {
+          const mctx = frame.maskCanvas.getContext('2d');
+          const mData = mctx.getImageData(0, 0, frame.rect.w, frame.rect.h);
+          bounds = ImageProcessor.getRectContentBounds(
+            mData,
+            { x: 0, y: 0, w: frame.rect.w, h: frame.rect.h },
+            { alphaThreshold: 15, tolerance: 25 }
+          );
+        } catch (e) {
+          bounds = null;
+        }
+      }
+
+      if (!bounds && sourceImageData) {
+        bounds = ImageProcessor.getRectContentBounds(sourceImageData, frame.rect, {
+          alphaThreshold: 15,
+          tolerance: 25
+        });
+      }
+
+      if (bounds && !bounds.empty) {
+        frameAlignment.autoAlignFrameToGround(frame, bounds, { alignX: false });
+        alignedCount++;
+      }
+    }
+
+    // 触发状态与界面刷新
+    state.setState({ frames: [...frames] });
+    const selectedFrame = state.getSelectedFrame();
+    this.updateOffsetUI(selectedFrame);
+    this.renderMainCanvas();
+    this.renderPlayerViewport();
+
+    if (alignAll) {
+      const msg = `已完成全部 ${alignedCount} 帧 Y 轴自动贴地对齐！(若有跳跃腾空帧，可在播放器中直接按住人物向上拖拽调高)`;
+      this.setStatus(msg);
+      this.showToast(`全部 ${alignedCount} 帧角色脚底已自动对齐地面线！跳跃帧可在播放器中直接往上拖高`, 'success');
+    } else if (selectedFrame) {
+      this.setStatus(`已将 [${selectedFrame.name}] 角色脚底自动贴合地面线 (Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
+    }
+  }
+
+  /**
+   * 绑定帧视口 (playerCanvas) 交互：
+   * 1. 鼠标在红色十字准星 10px 内按下拖拽：调整锚点 (Pivot)
+   * 2. 鼠标在画面其他区域按下拖拽：直接上下左右拖动角色微调当前帧偏移 (Offset X/Y)
    */
   bindPlayerCanvasPivotDrag() {
     if (!this.playerCanvas) return;
 
-    // 鼠标按下：检测是否命中准星并开启拖拽
+    // 鼠标按下：检测命中准星或进入角色位置直接拖拽模式
     this.playerCanvas.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       const selectedFrame = state.getSelectedFrame();
       const playerState = state.get('playerState') || {};
-      if (!selectedFrame || playerState.showPivot === false) return;
+      if (!selectedFrame) return;
 
       const mousePos = this.getPlayerCanvasMousePos(e);
       const crosshairPos = this.getPlayerCanvasCrosshairPos(selectedFrame);
 
-      if (this.isNearCrosshair(mousePos, crosshairPos, 10)) {
+      if (playerState.showPivot !== false && this.isNearCrosshair(mousePos, crosshairPos, 10)) {
         this.isDraggingPivot = true;
         this.draggedFrame = selectedFrame;
         this.playerCanvas.style.cursor = 'crosshair';
         e.preventDefault();
+        return;
       }
+
+      // 在播放器画面其他区域按下：直接拖拽角色调节当前帧 X / Y 偏移量
+      if (this.player && this.player.isPlaying) {
+        this.player.pause();
+      }
+      this.isDraggingOffset = true;
+      this.draggedFrame = selectedFrame;
+      this.offsetDragStartMouse = mousePos;
+      this.offsetDragInitial = {
+        x: selectedFrame.offset?.x || 0,
+        y: selectedFrame.offset?.y || 0
+      };
+      this.playerCanvas.style.cursor = 'grabbing';
+      e.preventDefault();
     });
 
-    // 鼠标移动：悬停显示十字光标，拖拽实时更新锚点与重绘
+    // 鼠标移动：悬停显示光标，拖拽实时更新锚点或偏移并重绘
     this.playerCanvas.addEventListener('mousemove', (e) => {
       const mousePos = this.getPlayerCanvasMousePos(e);
 
@@ -834,41 +958,67 @@ class SpriteAnimatorApp {
         return;
       }
 
-      // 悬停检测：当鼠标悬停在准星附近（命中半径 10px）时，光标显示为 crosshair
+      if (this.isDraggingOffset && this.draggedFrame && this.offsetDragStartMouse && this.offsetDragInitial) {
+        const selectedFrame = this.draggedFrame;
+        const scale = frameAlignment.lastRenderScale || 1.0;
+        const dx = Math.round((mousePos.x - this.offsetDragStartMouse.x) / scale);
+        const dy = Math.round((mousePos.y - this.offsetDragStartMouse.y) / scale);
+        const newX = this.offsetDragInitial.x + dx;
+        const newY = this.offsetDragInitial.y + dy;
+
+        selectedFrame.offset = { x: newX, y: newY };
+        state.updateFrame(selectedFrame.id, { offset: { x: newX, y: newY } });
+
+        this.updateOffsetUI(selectedFrame);
+        this.renderPlayerViewport();
+        this.renderMainCanvas();
+        this.setStatus(`拖拽调节 [${selectedFrame.name}] 位置偏移: X = ${newX}px, Y = ${newY}px (向上拖为腾空跳跃，向下拖贴合地面)`);
+        return;
+      }
+
+      // 悬停检测：当鼠标悬停在准星附近（命中半径 10px）时，光标显示为 crosshair，否则显示 grab 可抓取
       const selectedFrame = state.getSelectedFrame();
       const playerState = state.get('playerState') || {};
-      if (selectedFrame && playerState.showPivot !== false) {
-        const crosshairPos = this.getPlayerCanvasCrosshairPos(selectedFrame);
-        if (this.isNearCrosshair(mousePos, crosshairPos, 10)) {
-          this.playerCanvas.style.cursor = 'crosshair';
-          return;
+      if (selectedFrame) {
+        if (playerState.showPivot !== false) {
+          const crosshairPos = this.getPlayerCanvasCrosshairPos(selectedFrame);
+          if (this.isNearCrosshair(mousePos, crosshairPos, 10)) {
+            this.playerCanvas.style.cursor = 'crosshair';
+            return;
+          }
         }
+        this.playerCanvas.style.cursor = 'grab';
+        return;
       }
       this.playerCanvas.style.cursor = '';
     });
 
     // 鼠标松开：结束拖拽
     this.playerCanvas.addEventListener('mouseup', (e) => {
-      if (this.isDraggingPivot) {
+      if (this.isDraggingPivot || this.isDraggingOffset) {
+        const wasPivot = this.isDraggingPivot;
         this.isDraggingPivot = false;
+        this.isDraggingOffset = false;
         this.draggedFrame = null;
         this.pivotDragOrigin = null;
+        this.offsetDragStartMouse = null;
+        this.offsetDragInitial = null;
 
         const selectedFrame = state.getSelectedFrame();
         if (selectedFrame) {
           const mousePos = this.getPlayerCanvasMousePos(e);
           const crosshairPos = this.getPlayerCanvasCrosshairPos(selectedFrame);
-          this.playerCanvas.style.cursor = this.isNearCrosshair(mousePos, crosshairPos, 10) ? 'crosshair' : '';
+          this.playerCanvas.style.cursor = this.isNearCrosshair(mousePos, crosshairPos, 10) ? 'crosshair' : 'grab';
         } else {
           this.playerCanvas.style.cursor = '';
         }
-        this.setStatus('已完成帧锚点拖拽设置');
+        this.setStatus(wasPivot ? '已完成帧锚点拖拽设置' : '已完成当前帧角色偏移拖拽微调');
       }
     });
 
     // 鼠标离开：若非拖拽中则重置光标
     this.playerCanvas.addEventListener('mouseleave', () => {
-      if (!this.isDraggingPivot) {
+      if (!this.isDraggingPivot && !this.isDraggingOffset) {
         this.playerCanvas.style.cursor = '';
       }
     });
@@ -876,14 +1026,18 @@ class SpriteAnimatorApp {
     // 全局 mouseup 保护，防止拖拽移出画布后松开按键状态卡死
     if (typeof window !== 'undefined') {
       window.addEventListener('mouseup', () => {
-        if (this.isDraggingPivot) {
+        if (this.isDraggingPivot || this.isDraggingOffset) {
+          const wasPivot = this.isDraggingPivot;
           this.isDraggingPivot = false;
+          this.isDraggingOffset = false;
           this.draggedFrame = null;
           this.pivotDragOrigin = null;
+          this.offsetDragStartMouse = null;
+          this.offsetDragInitial = null;
           if (this.playerCanvas) {
             this.playerCanvas.style.cursor = '';
           }
-          this.setStatus('已完成帧锚点拖拽设置');
+          this.setStatus(wasPivot ? '已完成帧锚点拖拽设置' : '已完成当前帧角色偏移拖拽微调');
         }
       });
     }
@@ -1606,12 +1760,13 @@ class SpriteAnimatorApp {
         const cellH = Math.max(4, Math.floor(imgH / rows));
 
         const filterEmpty = this.gridFilterEmpty ? this.gridFilterEmpty.checked : true;
+        const autoAlignY = this.gridAutoAlignY ? this.gridAutoAlignY.checked : true;
         let imageData = null;
-        if (filterEmpty) {
+        if (filterEmpty || autoAlignY) {
           try {
             imageData = ImageProcessor.getImageDataFromImage(sourceImage);
           } catch (e) {
-            console.warn('提取整图 ImageData 进行空白过滤失败，降级为不过滤:', e);
+            console.warn('提取整图 ImageData 进行空白过滤/自动对齐失败:', e);
           }
         }
 
@@ -1637,14 +1792,27 @@ class SpriteAnimatorApp {
               }
             }
 
-            newFrames.push({
+            const frameObj = {
               id: 'frame_' + Date.now() + '_' + count,
               name: `帧 ${count}`,
               rect,
               offset: { x: 0, y: 0 },
               pivot: { x: 0.5, y: 1.0 }, // 默认脚底中心对齐
               maskCanvas: null
-            });
+            };
+
+            // 若勾选了自动按角色真实脚底对齐 Y 轴地面线
+            if (autoAlignY && imageData) {
+              const bounds = ImageProcessor.getRectContentBounds(imageData, rect, {
+                alphaThreshold: 15,
+                tolerance: 25
+              });
+              if (bounds && !bounds.empty) {
+                frameAlignment.autoAlignFrameToGround(frameObj, bounds, { alignX: false });
+              }
+            }
+
+            newFrames.push(frameObj);
             count++;
           }
         }
@@ -1661,7 +1829,8 @@ class SpriteAnimatorApp {
         this.renderMainCanvas();
 
         const filterMsg = filteredCount > 0 ? ` (已智能剔除 ${filteredCount} 帧空白背景)` : '';
-        this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧${filterMsg}，单帧规格 ${cellW} × ${cellH} px`);
+        const alignMsg = autoAlignY ? '，并已自动对齐全部帧 Y 轴脚底地面线' : '';
+        this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧${filterMsg}${alignMsg}，单帧规格 ${cellW} × ${cellH} px`);
       });
     }
   }

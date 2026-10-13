@@ -499,6 +499,97 @@ export class ImageProcessor {
     const ratio = foregroundCount / sampledTotal;
     return ratio < minRatio;
   }
+
+  /**
+   * 检测指定矩形区域内前景角色像素的真实紧致边界与底部脚底空白距离
+   * @param {ImageData|Object} imageData 图像像素数据
+   * @param {{x: number, y: number, w: number, h: number}} rect 矩形范围
+   * @param {Object} [options]
+   * @param {number} [options.alphaThreshold=25] 透明判定阈值 (0~255)
+   * @param {number} [options.colorTolerance=30] 纯色背景色差容差
+   * @returns {{ localMinX: number, localMaxX: number, localMinY: number, localMaxY: number, topGap: number, bottomGap: number, leftGap: number, rightGap: number, contentW: number, contentH: number } | null}
+   */
+  static getRectContentBounds(imageData, rect, options = {}) {
+    if (!imageData || !imageData.data || !rect) return null;
+    const { x, y, w, h } = rect;
+    if (w <= 0 || h <= 0) return null;
+
+    const imgW = imageData.width;
+    const imgH = imageData.height;
+    const data = imageData.data;
+    const alphaThreshold = options.alphaThreshold ?? 25;
+    const tolerance = options.colorTolerance ?? 30;
+
+    const startX = Math.max(0, Math.min(imgW - 1, Math.round(x)));
+    const startY = Math.max(0, Math.min(imgH - 1, Math.round(y)));
+    const endX = Math.max(0, Math.min(imgW, Math.round(x + w)));
+    const endY = Math.max(0, Math.min(imgH, Math.round(y + h)));
+
+    const actualW = endX - startX;
+    const actualH = endY - startY;
+    if (actualW <= 0 || actualH <= 0) return null;
+
+    // 采样左上角作为背景参考
+    const bgOffset = (startY * imgW + startX) * 4;
+    const bgR = data[bgOffset];
+    const bgG = data[bgOffset + 1];
+    const bgB = data[bgOffset + 2];
+    const bgA = data[bgOffset + 3];
+    const isBgTransparent = bgA <= alphaThreshold;
+
+    let localMinX = actualW;
+    let localMaxX = -1;
+    let localMinY = actualH;
+    let localMaxY = -1;
+
+    for (let py = startY; py < endY; py++) {
+      const rowOffset = py * imgW;
+      const ly = py - startY;
+      for (let px = startX; px < endX; px++) {
+        const pOffset = (rowOffset + px) * 4;
+        const a = data[pOffset + 3];
+        let isForeground = false;
+
+        if (isBgTransparent) {
+          isForeground = a > alphaThreshold;
+        } else {
+          if (a <= alphaThreshold) {
+            isForeground = false;
+          } else {
+            const dr = Math.abs(data[pOffset] - bgR);
+            const dg = Math.abs(data[pOffset + 1] - bgG);
+            const db = Math.abs(data[pOffset + 2] - bgB);
+            isForeground = (dr > tolerance || dg > tolerance || db > tolerance);
+          }
+        }
+
+        if (isForeground) {
+          const lx = px - startX;
+          if (lx < localMinX) localMinX = lx;
+          if (lx > localMaxX) localMaxX = lx;
+          if (ly < localMinY) localMinY = ly;
+          if (ly > localMaxY) localMaxY = ly;
+        }
+      }
+    }
+
+    if (localMaxX < 0 || localMaxY < 0) {
+      return null;
+    }
+
+    return {
+      localMinX,
+      localMaxX,
+      localMinY,
+      localMaxY,
+      topGap: localMinY,
+      bottomGap: actualH - 1 - localMaxY,
+      leftGap: localMinX,
+      rightGap: actualW - 1 - localMaxX,
+      contentW: localMaxX - localMinX + 1,
+      contentH: localMaxY - localMinY + 1
+    };
+  }
 }
 
 export default ImageProcessor;

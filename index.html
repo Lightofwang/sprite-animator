@@ -15,7 +15,7 @@
         <div class="brand">
           <div class="brand-icon">⚡</div>
           <span>Sprite Animator</span>
-          <span class="badge-version">v1.5</span>
+          <span class="badge-version">v1.6</span>
         </div>
 
         <div class="toolbar-divider"></div>
@@ -239,13 +239,25 @@
               <div class="offset-inputs">
                 <div class="coord-field">
                   <span>X:</span>
-                  <input type="number" id="offset-x" value="0">
+                  <input type="number" id="offset-x" value="0" title="水平偏移量 (也可直接在下方播放器拖拽人物调节)">
                 </div>
                 <div class="coord-field">
                   <span>Y:</span>
-                  <input type="number" id="offset-y" value="0">
+                  <input type="number" id="offset-y" value="0" title="垂直偏移量 (正数向下贴地，负数向上腾空)">
                 </div>
               </div>
+            </div>
+
+            <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
+              <button class="btn btn-secondary btn-sm" id="btn-align-frame-ground" style="flex: 1; padding: 3px 6px; font-size: 11px;" title="自动扫描当前帧角色脚底最低像素，贴合到地面基准线">
+                ⏬ 当前帧贴地
+              </button>
+              <button class="btn btn-primary btn-sm" id="btn-align-all-ground" style="flex: 1.2; padding: 3px 6px; font-size: 11px;" title="一键扫描全部动作帧角色脚底，自动统一对齐到地面基准线">
+                🎯 全部Y轴贴地
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-reset-offset" style="padding: 3px 6px; font-size: 11px;" title="将当前帧 X/Y 偏移量重置归零">
+                ↺ 归零
+              </button>
             </div>
 
             <div class="control-row">
@@ -472,8 +484,14 @@
           <span>智能过滤末尾无内容空白帧 (自动剔除全黑/全透明无人物方块)</span>
         </label>
 
+        <!-- 自动Y轴脚底对齐开关 -->
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: var(--text-main);">
+          <input type="checkbox" id="grid-auto-align-y" checked style="accent-color: var(--accent-blue);">
+          <span>🎯 自动按角色真实脚底对齐 Y 轴地面线 (自动补偿每格底部空白高度差)</span>
+        </label>
+
         <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
-          💡 提示：单次切片上限为 100 帧；生成网格后可在右侧点击「📐 统一全部尺寸」或手动微调。
+          💡 提示：若某帧为跳跃腾空动作（如起跳帧），可在选中该帧后直接在右下角播放器中向上拖拽角色，或点击「↺ 归零」。
         </div>
       </div>
       <div class="modal-footer">

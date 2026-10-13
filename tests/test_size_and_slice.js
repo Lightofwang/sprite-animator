@@ -164,6 +164,49 @@ it('包含明显角色前景像素的区域正确判定为非空白 (empty = fal
   assert.strictEqual(isEmpty, false);
 });
 
+// -----------------------------------------------------------------------------
+// 5. 自动扫描角色真实脚底与自动 Y 轴贴地对齐验证 (getRectContentBounds & autoAlignFrameToGround)
+// -----------------------------------------------------------------------------
+console.log('\n▶ [测试组 5] 自动扫描角色真实脚底与自动 Y 轴贴地对齐验证:');
+
+it('当角色画在格子偏上方（脚底离选框底边有 100px 透明空白）时，自动补偿 offset.y = +100 使脚底精准贴地', () => {
+  const W = 200, H = 500;
+  const data = new Uint8ClampedArray(W * H * 4); // 透明背景
+  // 角色像素在 y = [50, 399] 之间（即 localMaxY = 399，距离底部 500 还有 100px 空白）
+  for (let y = 50; y <= 399; y++) {
+    for (let x = 60; x <= 140; x++) {
+      const idx = (y * W + x) * 4;
+      data[idx] = 255;
+      data[idx + 1] = 128;
+      data[idx + 2] = 0;
+      data[idx + 3] = 255;
+    }
+  }
+
+  const rect = { x: 0, y: 0, w: W, h: H };
+  const bounds = ImageProcessor.getRectContentBounds({ width: W, height: H, data }, rect);
+
+  assert.strictEqual(bounds.empty, false);
+  assert.strictEqual(bounds.localMinY, 50);
+  assert.strictEqual(bounds.localMaxY, 399);
+  assert.strictEqual(bounds.bottomGap, 100);
+
+  const frame = {
+    id: 'frame_5',
+    rect,
+    pivot: { x: 0.5, y: 1.0 },
+    offset: { x: 0, y: 0 }
+  };
+
+  alignment.autoAlignFrameToGround(frame, bounds);
+  assert.strictEqual(frame.offset.y, 100, '应当自动向下偏移 +100px 消除脚底与格子底边的 100px 空白');
+
+  // 验证渲染到 targetBaseY = 400 时，角色脚底像素 (dy + localMaxY + 1) 恰好等于 400
+  const renderPos = alignment.calculateWorldRenderPos(frame, 200, 400);
+  const renderedFootBottomY = renderPos.dy + (bounds.localMaxY + 1);
+  assert.strictEqual(renderedFootBottomY, 400, '渲染后角色真实脚底与地面基准线 targetBaseY (400) 严丝合缝重合');
+});
+
 console.log('\n======================================================');
 console.log(`📊 测试汇总: 共通过 ${passCount} 项, 失败 ${failCount} 项`);
 console.log('======================================================\n');

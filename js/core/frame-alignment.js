@@ -171,6 +171,41 @@ export class FrameAlignment {
     return { ...frame.offset };
   }
 
+  /**
+   * 根据检测到的角色真实内容边界，自动计算并设置帧的 offset.y（及可选 offset.x），
+   * 使角色真实最低点（脚底）精准贴合到地面基准线 targetBaseY
+   * @param {Object} frame 帧对象
+   * @param {{ localMinX: number, localMaxX: number, localMinY: number, localMaxY: number }} bounds 角色真实像素边界
+   * @param {{ alignX?: boolean }} [options={}]
+   * @returns {{ x: number, y: number }} 更新后的 offset
+   */
+  autoAlignFrameToGround(frame, bounds, options = {}) {
+    if (!frame || !frame.rect || !bounds) {
+      return frame?.offset || { x: 0, y: 0 };
+    }
+    if (!frame.offset) {
+      frame.offset = { x: 0, y: 0 };
+    }
+
+    const w = frame.rect.w;
+    const h = frame.rect.h;
+    const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
+    const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
+
+    // 角色真实最低点在局部框内的底部坐标为 bounds.localMaxY + 1
+    // 渲染时 dy = targetBaseY - h * py + offset.y
+    // 要使角色脚底 dy + (bounds.localMaxY + 1) === targetBaseY，则：
+    // offset.y = h * py - (bounds.localMaxY + 1)
+    frame.offset.y = Math.round(h * py - (bounds.localMaxY + 1));
+
+    if (options.alignX) {
+      const contentCenterX = (bounds.localMinX + bounds.localMaxX + 1) / 2;
+      frame.offset.x = Math.round(w * px - contentCenterX);
+    }
+
+    return { ...frame.offset };
+  }
+
   // ================= 3. 洋葱皮残影生成 (Onion Skinning Helper) =================
 
   /**
@@ -441,13 +476,11 @@ export class FrameAlignment {
     }
     ctx.restore();
 
-    // 4. 绘制当前帧的锚点十字准星 (在屏幕绝对像素空间，保持准星清晰度)
+    // 4. 绘制地面基准靶心准星 (固定在地面基准线中心 targetBaseX, targetBaseY，方便观察角色脚底是否踩准地面)
     if (currentFrame && showPivot) {
       ctx.save();
-      const ox = currentFrame.offset ? (currentFrame.offset.x || 0) : 0;
-      const oy = currentFrame.offset ? (currentFrame.offset.y || 0) : 0;
-      const pivotScreenX = targetBaseX + ox * scale;
-      const pivotScreenY = targetBaseY + oy * scale;
+      const pivotScreenX = targetBaseX;
+      const pivotScreenY = targetBaseY;
 
       // 准星红色外圆
       ctx.strokeStyle = '#ff006e';

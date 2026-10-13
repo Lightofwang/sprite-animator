@@ -1255,6 +1255,31 @@ export class CanvasWorkspace {
     ctx.fillStyle = '#ffffff';
     ctx.fillText(badgeText, sp.x + 4, badgeY + 10);
 
+    // 绘制该帧内部对应的地面基准线与小锚点 (直观展示 Y 轴对齐高度)
+    const pivot = frame.pivot || { x: 0.5, y: 1.0 };
+    const ox = frame.offset?.x || 0;
+    const oy = frame.offset?.y || 0;
+    const pWorldX = x + w * pivot.x - ox;
+    const pWorldY = y + h * pivot.y - oy;
+    const pScreen = this.worldToScreen(pWorldX, pWorldY);
+
+    if (pScreen.y >= sp.y && pScreen.y <= sp.y + sh) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(0, 245, 212, 0.55)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(sp.x, pScreen.y);
+      ctx.lineTo(sp.x + sw, pScreen.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#00f5d4';
+      ctx.beginPath();
+      ctx.arc(pScreen.x, pScreen.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 
@@ -1301,11 +1326,24 @@ export class CanvasWorkspace {
     ctx.font = 'bold 11px monospace';
     ctx.fillText(badgeText, sp.x + 5, badgeY + 12);
 
-    // 4. 锚点 (Pivot) 准星
+    // 4. 锚点 (Pivot) 与地面基准线 (联动 offset.x / offset.y 实时反映脚底基准位置)
     const pivot = frame.pivot || { x: 0.5, y: 1.0 };
-    const pWorldX = x + w * pivot.x;
-    const pWorldY = y + h * pivot.y;
+    const ox = frame.offset?.x || 0;
+    const oy = frame.offset?.y || 0;
+    const pWorldX = x + w * pivot.x - ox;
+    const pWorldY = y + h * pivot.y - oy;
     const pScreen = this.worldToScreen(pWorldX, pWorldY);
+
+    // 绘制穿过锚点的粉红色水平地面虚线
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 0, 110, 0.75)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(sp.x, pScreen.y);
+    ctx.lineTo(sp.x + sw, pScreen.y);
+    ctx.stroke();
+    ctx.restore();
 
     ctx.strokeStyle = '#ff006e';
     ctx.lineWidth = 2;

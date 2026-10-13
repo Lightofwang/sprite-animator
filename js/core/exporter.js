@@ -270,12 +270,14 @@ export class Exporter {
         const fw = Math.max(1, frame.rect?.w || 32);
         const fh = Math.max(1, frame.rect?.h || 32);
 
-        // 创建单帧透明 Canvas 并渲染修复后的帧
+        // 创建单帧透明 Canvas 并渲染修复及对齐偏移后的帧
         const singleCanvas = this.createCanvas(fw, fh);
         const ctx = singleCanvas.getContext('2d');
+        const ox = (options.bakeOffset !== false && frame.offset) ? (frame.offset.x || 0) : 0;
+        const oy = (options.bakeOffset !== false && frame.offset) ? (frame.offset.y || 0) : 0;
         if (ctx) {
           ctx.clearRect(0, 0, fw, fh);
-          this.drawFrameToContext(ctx, frame, 0, 0, fw, fh, sourceImage);
+          this.drawFrameToContext(ctx, frame, ox, oy, fw, fh, sourceImage);
         }
 
         // 提取透明 PNG Blob
@@ -351,9 +353,9 @@ export class Exporter {
 
   /**
    * 将所有修复后的动作帧重新规整排版为绝无交叉重叠的透明新大图 (PNG)
-   * 采用统一单元格 + 16px 安全外围隔离护城河
+   * 采用统一单元格 + 16px 安全外围隔离护城河，并自动烘焙每帧的 offset 对齐偏移
    * @param {Array<Object>} frames 
-   * @param {Object} options { sourceImage, padding, columns, filename, alignment, download }
+   * @param {Object} options { sourceImage, padding, columns, filename, alignment, bakeOffset, download }
    * @returns {Promise<{ success: boolean, count: number, blob: Blob|Uint8Array, canvas: HTMLCanvasElement, layout: Object, error?: string }>}
    */
   static async exportNewSpriteSheet(frames, options = {}) {
@@ -380,17 +382,37 @@ export class Exporter {
         ctx.clearRect(0, 0, layout.width, layout.height);
         ctx.imageSmoothingEnabled = false;
 
-        // 4. 将每一帧严格按无交叉目标坐标绘制到新大图
+        // 4. 将每一帧严格按无交叉目标坐标（烘焙 offset 对齐偏移）绘制到新大图
         for (const item of layout.items) {
-          this.drawFrameToContext(
-            ctx,
-            item.frame,
-            item.x,
-            item.y,
-            item.w,
-            item.h,
-            sourceImage
-          );
+          const ox = (options.bakeOffset !== false && item.frame?.offset) ? (item.frame.offset.x || 0) : 0;
+          const oy = (options.bakeOffset !== false && item.frame?.offset) ? (item.frame.offset.y || 0) : 0;
+
+          if (typeof ctx.save === 'function' && typeof ctx.clip === 'function') {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(item.cellX, item.cellY, item.cellW, item.cellH);
+            ctx.clip();
+            this.drawFrameToContext(
+              ctx,
+              item.frame,
+              item.x + ox,
+              item.y + oy,
+              item.w,
+              item.h,
+              sourceImage
+            );
+            ctx.restore();
+          } else {
+            this.drawFrameToContext(
+              ctx,
+              item.frame,
+              item.x + ox,
+              item.y + oy,
+              item.w,
+              item.h,
+              sourceImage
+            );
+          }
         }
       }
 
