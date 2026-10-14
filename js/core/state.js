@@ -198,6 +198,7 @@ class StateStore {
       rect: frameData.rect ? { ...frameData.rect } : { x: 0, y: 0, w: 64, h: 64 },
       offset: frameData.offset ? { ...frameData.offset } : { x: 0, y: 0 },
       pivot: frameData.pivot ? { ...frameData.pivot } : { x: 0.5, y: 1.0 }, // 默认脚底水平居中
+      scale: (typeof frameData.scale === 'number' && !isNaN(frameData.scale) && frameData.scale > 0) ? frameData.scale : 1.0, // 缩放比例，默认 1.0
       maskCanvas: frameData.maskCanvas || null,
       customPixels: frameData.customPixels || null,
       duration: frameData.duration || Math.round(1000 / this._state.playerState.fps)

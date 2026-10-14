@@ -114,29 +114,76 @@ export class FrameAlignment {
   }
 
   /**
-   * 根据帧尺寸、归一化锚点和 offset 偏移量，计算在世界视口或播放器基准点下绘制时的左上角实际渲染坐标
+   * 根据帧尺寸、缩放比例、归一化锚点和 offset 偏移量，计算在世界视口或播放器基准点下绘制时的左上角实际渲染坐标
    * 公式:
-   *   dx = targetBaseX - w * pivotX + offset.x
-   *   dy = targetBaseY - h * pivotY + offset.y
+   *   renderW = round(w * scale)
+   *   renderH = round(h * scale)
+   *   dx = targetBaseX - renderW * pivotX + offset.x
+   *   dy = targetBaseY - renderH * pivotY + offset.y
    * @param {Object} frame 帧对象
    * @param {number} targetBaseX 目标视口世界基准 X 坐标 (如画布中心)
    * @param {number} targetBaseY 目标视口世界基准 Y 坐标 (如地面高度)
-   * @returns {{dx: number, dy: number}} 左上角渲染坐标
+   * @returns {{dx: number, dy: number, renderW: number, renderH: number, scale: number}} 渲染坐标与尺寸
    */
   calculateWorldRenderPos(frame, targetBaseX, targetBaseY) {
-    if (!frame) return { dx: targetBaseX, dy: targetBaseY };
+    if (!frame) return { dx: targetBaseX, dy: targetBaseY, renderW: 0, renderH: 0, scale: 1.0 };
 
+    const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
     const w = frame.rect ? frame.rect.w : 0;
     const h = frame.rect ? frame.rect.h : 0;
+    const renderW = Math.round(w * s);
+    const renderH = Math.round(h * s);
+
     const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
     const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
     const ox = frame.offset ? (frame.offset.x || 0) : 0;
     const oy = frame.offset ? (frame.offset.y || 0) : 0;
 
-    const dx = targetBaseX - w * px + ox;
-    const dy = targetBaseY - h * py + oy;
+    const dx = targetBaseX - renderW * px + ox;
+    const dy = targetBaseY - renderH * py + oy;
 
-    return { dx, dy };
+    return { dx, dy, renderW, renderH, scale: s };
+  }
+
+  // ================= 1.5 缩放比例微调 (Frame Scale) =================
+
+  /**
+   * 设置当前帧的缩放比例
+   * @param {Object} frame 帧对象
+   * @param {number|string} scale 缩放比例数值 (如 1.0, 0.85)
+   * @returns {number} 规范化后的缩放值
+   */
+  setScale(frame, scale) {
+    if (!frame) throw new Error('[FrameAlignment] frame 不能为空');
+    let val = parseFloat(scale);
+    if (isNaN(val) || val <= 0) val = 1.0;
+    // 限制范围在 0.2 (20%) 到 3.0 (300%)
+    val = Math.max(0.2, Math.min(3.0, Math.round(val * 1000) / 1000));
+    frame.scale = val;
+    return frame.scale;
+  }
+
+  /**
+   * 增量微调帧的缩放比例
+   * @param {Object} frame 帧对象
+   * @param {number} delta 如 0.05 或 -0.05
+   * @returns {number}
+   */
+  nudgeScale(frame, delta) {
+    if (!frame) throw new Error('[FrameAlignment] frame 不能为空');
+    const current = (typeof frame.scale === 'number') ? frame.scale : 1.0;
+    return this.setScale(frame, current + delta);
+  }
+
+  /**
+   * 重置帧缩放比例为 1.0 (100%)
+   * @param {Object} frame 帧对象
+   * @returns {number}
+   */
+  resetScale(frame) {
+    if (!frame) throw new Error('[FrameAlignment] frame 不能为空');
+    frame.scale = 1.0;
+    return 1.0;
   }
 
   // ================= 2. 位置微调 (Keyboard Nudge & Offset) =================
