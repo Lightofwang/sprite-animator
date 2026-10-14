@@ -274,6 +274,16 @@
               </div>
             </div>
 
+            <!-- 一键智能自动身高校准 -->
+            <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
+              <button class="btn btn-primary btn-sm" id="btn-auto-scale-all" style="flex: 1; padding: 4px 6px; font-size: 11px;" title="以第1帧为基准，智能排除刀光等高空特效，一键自动校准所有帧的人物身高比例">
+                🎯 全部自动对齐身量
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-auto-scale-frame" style="padding: 4px 6px; font-size: 11px;" title="将当前选中帧的人物身高一键校准到与第1帧一致">
+                📏 当前帧校准
+              </button>
+            </div>
+
             <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
               <button class="btn btn-primary btn-sm" id="btn-align-all-xy" style="flex: 1; padding: 4px 6px; font-size: 11px;" title="一键按角色重心与地面线自动对齐全部帧，之后可在下方预览框直接鼠标拖拽自由微调">
                 🎯 全部自动对齐
@@ -303,7 +313,7 @@
         </div>
 
         <!-- 下半部：实时动画播放器视口 -->
-        <div class="sidebar-section panel-player">
+        <div class="sidebar-section panel-player" id="panel-player">
           <div class="section-header">
             <span>实时动画播放器</span>
             <div class="actions">
@@ -320,12 +330,15 @@
                 <option value="once">单次播放</option>
                 <option value="pingpong">往返乒乓</option>
               </select>
+              <button class="btn btn-icon btn-secondary" id="btn-toggle-fullscreen-player" title="最大化 / 展开大屏视口预览" style="margin-left: 4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              </button>
             </div>
           </div>
 
-          <!-- 播放器视口舞台 -->
+          <!-- 播放器视口舞台 (超大高清视口) -->
           <div class="player-stage-wrapper checkerboard-bg" id="player-wrapper">
-            <canvas id="player-canvas" width="288" height="288"></canvas>
+            <canvas id="player-canvas" width="460" height="380"></canvas>
             <div class="player-frame-indicator" id="player-frame-indicator">0 / 0</div>
           </div>
 

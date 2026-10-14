@@ -137,6 +137,8 @@ class SpriteAnimatorApp {
     this.btnScaleMinus = document.getElementById('btn-scale-minus');
     this.btnScalePlus = document.getElementById('btn-scale-plus');
     this.btnResetScale = document.getElementById('btn-reset-scale');
+    this.btnAutoScaleAll = document.getElementById('btn-auto-scale-all');
+    this.btnAutoScaleFrame = document.getElementById('btn-auto-scale-frame');
 
     // 播放器与视口控件
     this.btnPlayPause = document.getElementById('btn-play-pause');
@@ -151,6 +153,8 @@ class SpriteAnimatorApp {
     this.btnPrevFrame = document.getElementById('btn-prev-frame');
     this.btnNextFrame = document.getElementById('btn-next-frame');
     this.btnLastFrame = document.getElementById('btn-last-frame');
+    this.panelPlayer = document.getElementById('panel-player') || document.querySelector('.panel-player');
+    this.btnToggleFullscreenPlayer = document.getElementById('btn-toggle-fullscreen-player');
 
     // 背景透明化模态框元素
     this.modalRemoveBg = document.getElementById('modal-remove-bg');
@@ -677,14 +681,56 @@ class SpriteAnimatorApp {
       });
     }
 
-    // 5. 键盘全局快捷键：
+    // 5. 播放器大屏全屏模式切换
+    if (this.btnToggleFullscreenPlayer && this.panelPlayer) {
+      this.btnToggleFullscreenPlayer.addEventListener('click', () => {
+        const isFullscreen = this.panelPlayer.classList.toggle('fullscreen-mode');
+        if (isFullscreen) {
+          this.playerCanvas.width = 640;
+          this.playerCanvas.height = 500;
+          this.btnToggleFullscreenPlayer.title = '退出大屏视口 (Esc)';
+          this.btnToggleFullscreenPlayer.classList.add('active');
+          this.setStatus('已进入大屏视口预览模式 (按 Esc 或再次点击退出)');
+        } else {
+          this.playerCanvas.width = 460;
+          this.playerCanvas.height = 380;
+          this.btnToggleFullscreenPlayer.title = '最大化 / 展开大屏视口预览';
+          this.btnToggleFullscreenPlayer.classList.remove('active');
+          this.setStatus('已恢复标准侧边栏视口预览');
+        }
+        this.renderPlayerViewport();
+        if (this.player && this.player.isPlaying) {
+          this.player.render();
+        }
+      });
+    }
+
+    // 6. 键盘全局快捷键：
     //    - 空格键 (Space): 播放/暂停切换
+    //    - Esc 键: 退出播放器全屏模式
     //    - 逗号 (,) / 左箭头 (ArrowLeft, 暂停时且无 Shift): 上一帧
     //    - 句号 (.) / 右箭头 (ArrowRight, 暂停时且无 Shift): 下一帧
     //    - 方向键 (ArrowUp/Down/Left/Right 配合 Shift 或单独上下键): 1px / 10px 偏移量微调
     window.addEventListener('keydown', (e) => {
       const tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // 按 Esc 退出大屏视口预览
+      if (e.key === 'Escape' && this.panelPlayer && this.panelPlayer.classList.contains('fullscreen-mode')) {
+        this.panelPlayer.classList.remove('fullscreen-mode');
+        this.playerCanvas.width = 460;
+        this.playerCanvas.height = 380;
+        if (this.btnToggleFullscreenPlayer) {
+          this.btnToggleFullscreenPlayer.title = '最大化 / 展开大屏视口预览';
+          this.btnToggleFullscreenPlayer.classList.remove('active');
+        }
+        this.renderPlayerViewport();
+        if (this.player && this.player.isPlaying) {
+          this.player.render();
+        }
+        this.setStatus('已退出大屏视口预览');
+        return;
+      }
 
       // 空格键：播放/暂停切换
       if (e.code === 'Space') {
@@ -880,6 +926,18 @@ class SpriteAnimatorApp {
       });
     }
 
+    // 2.4 一键智能自动身高校准
+    if (this.btnAutoScaleAll) {
+      this.btnAutoScaleAll.addEventListener('click', () => {
+        this.handleAutoScale(true);
+      });
+    }
+    if (this.btnAutoScaleFrame) {
+      this.btnAutoScaleFrame.addEventListener('click', () => {
+        this.handleAutoScale(false);
+      });
+    }
+
     // 2.5 自动对齐、脚底贴地与归零快捷按钮（自定义位置可直接拖拽预览框角色）
     if (this.btnAlignAllXY) {
       this.btnAlignAllXY.addEventListener('click', () => {
@@ -932,6 +990,91 @@ class SpriteAnimatorApp {
 
     // 5. 帧视口 (playerCanvas) 红色十字准星拖拽与角色画面直接拖拽调整偏移交互
     this.bindPlayerCanvasPivotDrag();
+  }
+
+  /**
+   * 一键智能自动身高校准 (排除高空白色刀光等干扰，以第1帧为基准自动对齐人物身量比例)
+   * @param {boolean} all - true: 校准全部帧; false: 仅校准当前选中帧
+   */
+  handleAutoScale(all = true) {
+    const sourceImage = state.get('sourceImage');
+    const frames = state.get('frames') || [];
+    if (!sourceImage || frames.length === 0) {
+      this.setStatus('请先导入图像并添加或识别动作选框');
+      this.showToast('请先导入图像并添加动作选框', 'warning');
+      return;
+    }
+
+    if (all) {
+      if (frames.length < 2) {
+        this.setStatus('帧数量少于 2 帧，无需执行跨帧身高校准');
+        return;
+      }
+
+      this.setStatus('正在智能计算并校准全部动作帧人物身量比例...');
+      const result = frameAlignment.autoNormalizeAllScales(frames, sourceImage, 0);
+
+      if (result.normalizedCount > 0) {
+        // 同步更新每帧的 scale 属性到 state
+        frames.forEach(f => {
+          state.updateFrame(f.id, { scale: f.scale || 1.0 });
+        });
+
+        // 更新当前选中帧的 UI 控件
+        const curFrame = state.getSelectedFrame();
+        if (curFrame) {
+          this.updateOffsetUI(curFrame);
+        }
+
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.renderFrameList();
+
+        const msg = `🎯 身高校准完毕: 以第1帧 (${result.refHeight}px) 为基准，已成功自动对齐全部 ${result.normalizedCount} 帧的角色身量！`;
+        this.setStatus(msg);
+        this.showToast(msg, 'success');
+      } else {
+        this.setStatus('身高校准失败: 未能从帧画面中提取到有效角色躯干高度');
+        this.showToast('未能提取到有效角色高度，请确认画面内容', 'warning');
+      }
+    } else {
+      // 仅校准当前选中帧
+      const curFrame = state.getSelectedFrame();
+      if (!curFrame) {
+        this.setStatus('请先在动作帧列表中选择一个目标帧');
+        this.showToast('请先选择一个动作帧', 'warning');
+        return;
+      }
+
+      const refFrame = frames[0];
+      if (curFrame.id === refFrame.id) {
+        curFrame.scale = 1.0;
+        state.updateFrame(curFrame.id, { scale: 1.0 });
+        this.updateOffsetUI(curFrame);
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.renderFrameList();
+        this.setStatus('当前帧为第1帧基准帧，缩放比例已设为 100%');
+        return;
+      }
+
+      const res = frameAlignment.autoNormalizeFrameScale(curFrame, refFrame, sourceImage);
+      if (res.success) {
+        state.updateFrame(curFrame.id, { scale: res.scale });
+        this.updateOffsetUI(curFrame);
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.renderFrameList();
+
+        const percent = Math.round(res.scale * 100);
+        const msg = `📏 当前帧 [${curFrame.name}] 已校准: 躯干高度 ${res.targetHeight}px -> 基准 ${res.refHeight}px (比例设为 ${percent}%)`;
+        this.setStatus(msg);
+        this.showToast(`📏 成功校准当前帧人物比例为 ${percent}%`, 'success');
+      } else {
+        this.setStatus('当前帧身高校准失败: 未能识别有效躯干高度');
+        this.showToast('未能识别有效躯干高度', 'warning');
+      }
+    }
   }
 
   /**
@@ -2408,17 +2551,17 @@ class SpriteAnimatorApp {
 
       const thumbCanvas = document.createElement('canvas');
       thumbCanvas.className = 'frame-thumb-canvas';
-      thumbCanvas.width = 66;
-      thumbCanvas.height = 66;
+      thumbCanvas.width = 96;
+      thumbCanvas.height = 96;
       const tctx = thumbCanvas.getContext('2d');
 
       if (tctx && frame.rect.w > 0 && frame.rect.h > 0) {
         tctx.imageSmoothingEnabled = false;
-        const scale = Math.min(60 / frame.rect.w, 60 / frame.rect.h);
+        const scale = Math.min(88 / frame.rect.w, 88 / frame.rect.h);
         const dw = frame.rect.w * scale;
         const dh = frame.rect.h * scale;
-        const dx = (66 - dw) / 2;
-        const dy = (66 - dh) / 2;
+        const dx = (96 - dw) / 2;
+        const dy = (96 - dh) / 2;
 
         if (frame.maskCanvas) {
           tctx.drawImage(
@@ -2438,6 +2581,14 @@ class SpriteAnimatorApp {
       const badge = document.createElement('div');
       badge.className = 'frame-badge';
       badge.textContent = `${idx + 1}`;
+
+      // 若当前帧进行了缩放，在缩略图左下角显示醒目的缩放比例徽章
+      if (typeof frame.scale === 'number' && Math.round(frame.scale * 100) !== 100) {
+        const scalePill = document.createElement('div');
+        scalePill.style.cssText = 'position: absolute; bottom: 4px; left: 4px; font-size: 9px; font-weight: 700; background: rgba(58, 134, 255, 0.85); color: #fff; padding: 1px 4px; border-radius: 3px; font-family: var(--font-mono); pointer-events: none;';
+        scalePill.textContent = `${Math.round(frame.scale * 100)}%`;
+        thumbBox.appendChild(scalePill);
+      }
 
       // 缩略图右上角单帧删除小叉叉按钮
       const delBtn = document.createElement('button');

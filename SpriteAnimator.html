@@ -457,15 +457,35 @@ body {
 
 /* 3. 右侧侧边栏 */
 .sidebar-panel {
-  width: 380px;
-  min-width: 340px;
-  max-width: 460px;
+  width: 480px;
+  min-width: 380px;
+  max-width: 850px;
   background-color: var(--bg-toolbar);
   border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
   z-index: 15;
+}
+
+/* 侧边栏拖拽拉伸把手 */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 50;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer.dragging {
+  background: var(--accent-blue);
+  box-shadow: 0 0 8px rgba(58, 134, 255, 0.6);
 }
 
 /* 面板通用分栏卡片 */
@@ -505,14 +525,14 @@ body {
   overflow: hidden;
 }
 
-/* 帧缩略图网格/列表容器 */
+/* 帧缩略图网格/列表容器 (舒适大卡片视图) */
 .frame-list-wrapper {
   flex: 1;
   overflow-y: auto;
   padding: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  gap: 10px;
   align-content: start;
 }
 
@@ -520,7 +540,7 @@ body {
   background-color: var(--bg-subpanel);
   border: 2px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 4px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -531,13 +551,14 @@ body {
 
 .frame-item:hover {
   border-color: var(--border-light);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 .frame-item.selected {
   border-color: var(--accent-blue);
   background-color: var(--accent-blue-subtle);
-  box-shadow: 0 0 10px rgba(58, 134, 255, 0.3);
+  box-shadow: 0 0 12px rgba(58, 134, 255, 0.4);
 }
 
 .frame-item.playing {
@@ -572,8 +593,8 @@ body {
 }
 
 .frame-thumb-box {
-  width: 66px;
-  height: 66px;
+  width: 96px;
+  height: 96px;
   border-radius: var(--radius-sm);
   overflow: hidden;
   display: flex;
@@ -789,8 +810,28 @@ body {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  background-color: #16161d;
-  min-height: 290px;
+  background-color: #12131a;
+  min-height: 380px;
+}
+
+/* 播放器全屏画中画大屏弹窗模式 */
+.panel-player.fullscreen-mode {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90vw;
+  max-width: 960px;
+  height: 85vh;
+  max-height: 800px;
+  z-index: 9999;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.9);
+  border: 1px solid var(--accent-blue);
+}
+
+.panel-player.fullscreen-mode .player-stage-wrapper {
+  min-height: 480px;
 }
 
 #player-canvas {
@@ -1178,7 +1219,10 @@ body {
       </section>
 
       <!-- 右侧侧边栏面板 -->
-      <aside class="sidebar-panel">
+      <aside class="sidebar-panel" id="sidebar-panel">
+        <!-- 侧边栏宽度可拖拽调整把手 -->
+        <div id="sidebar-resizer" class="sidebar-resizer" title="按住并左右拖拽调整右侧面板宽度"></div>
+
         <!-- 上半部：帧管理与对齐设置 -->
         <div class="sidebar-section panel-frames">
           <div class="section-header">
@@ -1273,6 +1317,16 @@ body {
               </div>
             </div>
 
+            <!-- 一键智能自动身高校准 -->
+            <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
+              <button class="btn btn-primary btn-sm" id="btn-auto-scale-all" style="flex: 1; padding: 4px 6px; font-size: 11px;" title="以第1帧为基准，智能排除刀光等高空特效，一键自动校准所有帧的人物身高比例">
+                🎯 全部自动对齐身量
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-auto-scale-frame" style="padding: 4px 6px; font-size: 11px;" title="将当前选中帧的人物身高一键校准到与第1帧一致">
+                📏 当前帧校准
+              </button>
+            </div>
+
             <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
               <button class="btn btn-primary btn-sm" id="btn-align-all-xy" style="flex: 1; padding: 4px 6px; font-size: 11px;" title="一键按角色重心与地面线自动对齐全部帧，之后可在下方预览框直接鼠标拖拽自由微调">
                 🎯 全部自动对齐
@@ -1302,7 +1356,7 @@ body {
         </div>
 
         <!-- 下半部：实时动画播放器视口 -->
-        <div class="sidebar-section panel-player">
+        <div class="sidebar-section panel-player" id="panel-player">
           <div class="section-header">
             <span>实时动画播放器</span>
             <div class="actions">
@@ -1319,12 +1373,15 @@ body {
                 <option value="once">单次播放</option>
                 <option value="pingpong">往返乒乓</option>
               </select>
+              <button class="btn btn-icon btn-secondary" id="btn-toggle-fullscreen-player" title="最大化 / 展开大屏视口预览" style="margin-left: 4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              </button>
             </div>
           </div>
 
-          <!-- 播放器视口舞台 -->
+          <!-- 播放器视口舞台 (超大高清视口) -->
           <div class="player-stage-wrapper checkerboard-bg" id="player-wrapper">
-            <canvas id="player-canvas" width="288" height="288"></canvas>
+            <canvas id="player-canvas" width="460" height="380"></canvas>
             <div class="player-frame-indicator" id="player-frame-indicator">0 / 0</div>
           </div>
 
@@ -3147,6 +3204,8 @@ class ImageProcessor {
     let allCount = 0;
     let bodySumX = 0;
     let bodyCount = 0;
+    let bodyMinY = actualH;
+    let bodyMaxY = -1;
 
     for (let py = startY; py < endY; py++) {
       const rowOffset = py * imgW;
@@ -3189,6 +3248,8 @@ class ImageProcessor {
           if (!isWhiteSlashEffect) {
             bodySumX += lx + 0.5;
             bodyCount++;
+            if (ly < bodyMinY) bodyMinY = ly;
+            if (ly > bodyMaxY) bodyMaxY = ly;
           }
         }
       }
@@ -3200,6 +3261,10 @@ class ImageProcessor {
 
     const contentW = localMaxX - localMinX + 1;
     const contentH = localMaxY - localMinY + 1;
+    const hasDistinctBody = (bodyCount > allCount * 0.10 && bodyMinY <= bodyMaxY);
+    const finalBodyMinY = hasDistinctBody ? bodyMinY : localMinY;
+    const finalBodyMaxY = hasDistinctBody ? bodyMaxY : localMaxY;
+    const bodyH = finalBodyMaxY - finalBodyMinY + 1;
 
     // 二次扫描贴近脚底的接地层 (底部 8% 高度范围，排除白色刀光)，精准定位左脚与右脚水平位置
     const footBandH = Math.max(6, Math.min(30, Math.round(contentH * 0.08)));
@@ -3263,6 +3328,9 @@ class ImageProcessor {
       rightGap: actualW - 1 - localMaxX,
       contentW,
       contentH,
+      bodyMinY: finalBodyMinY,
+      bodyMaxY: finalBodyMaxY,
+      bodyH,
       boxCenterX,
       massCenterX,
       bodyCenterX,
@@ -4124,6 +4192,8 @@ const overlapIsolator = new OverlapIsolator();
  * 解决序列帧重心跳动与对齐问题，提供九宫格锚点系统、绝对像素锚点、键盘偏移微调与洋葱皮残影比对
  */
 
+
+
 /**
  * 九宫格预设相对锚点定义
  * 包含键名、标准短代码、别名及相对帧尺寸的比例坐标 (0~1)
@@ -4387,6 +4457,185 @@ class FrameAlignment {
     }
 
     return { ...frame.offset };
+  }
+
+  // ================= 2.8 智能身高校准与自动缩放 (Auto Scale) =================
+
+  /**
+   * 自动检测帧中角色的有效身体包围盒与骨架身高 (排除高空飞溅刀光)
+   * @param {Object} frame 帧对象
+   * @param {HTMLImageElement|CanvasImageSource|null} sourceImage 原始大图
+   * @param {Object} [options={}] 可选 mockImageData 或参数
+   * @returns {{ empty: boolean, bodyH: number, bodyMinY: number, bodyMaxY: number, contentW: number, contentH: number, bodyCenterX?: number, leftFootX?: number } | null}
+   */
+  detectCharacterBodyBounds(frame, sourceImage = null, options = {}) {
+    if (!frame || !frame.rect) return null;
+
+    // 若单元测试中传入 mockImageData 则优先使用
+    if (options.mockImageData) {
+      return ImageProcessor.getRectContentBounds(options.mockImageData, frame.rect, options);
+    }
+
+    // 优先从 maskCanvas 提取 ImageData
+    if (frame.maskCanvas && typeof frame.maskCanvas.getContext === 'function') {
+      try {
+        const mctx = frame.maskCanvas.getContext('2d');
+        const mData = mctx.getImageData(0, 0, frame.rect.w, frame.rect.h);
+        const b = ImageProcessor.getRectContentBounds(
+          mData,
+          { x: 0, y: 0, w: frame.rect.w, h: frame.rect.h },
+          { alphaThreshold: 15, tolerance: 25, ...options }
+        );
+        if (b && !b.empty) return b;
+      } catch (e) {
+        // 忽略离屏异常
+      }
+    }
+
+    // 从 sourceImage 提取 ImageData
+    if (sourceImage && typeof ImageProcessor.getImageDataFromImage === 'function') {
+      try {
+        const sourceImageData = ImageProcessor.getImageDataFromImage(sourceImage);
+        if (sourceImageData) {
+          const b = ImageProcessor.getRectContentBounds(sourceImageData, frame.rect, {
+            alphaThreshold: 15,
+            tolerance: 25,
+            ...options
+          });
+          if (b && !b.empty) return b;
+        }
+      } catch (e) {
+        // 忽略原图提取异常
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 单帧自动身高校准：根据基准帧的角色身高，自动计算并更新当前目标帧的 scale
+   * @param {Object} targetFrame 待校准的目标帧
+   * @param {Object} referenceFrame 参考基准帧 (通常为第 1 帧)
+   * @param {HTMLImageElement|null} sourceImage
+   * @param {Object} [options={}] { boundsMap, referenceHeight }
+   * @returns {{ success: boolean, scale: number, refHeight: number, targetHeight: number }}
+   */
+  autoNormalizeFrameScale(targetFrame, referenceFrame, sourceImage = null, options = {}) {
+    if (!targetFrame) return { success: false, scale: 1.0, refHeight: 0, targetHeight: 0 };
+
+    const boundsMap = options.boundsMap || null;
+
+    // 获取基准帧身高
+    let refHeight = (typeof options.referenceHeight === 'number' && options.referenceHeight > 0)
+      ? options.referenceHeight
+      : null;
+
+    if (!refHeight && referenceFrame) {
+      const refBounds = (boundsMap && referenceFrame.id)
+        ? boundsMap.get(referenceFrame.id)
+        : this.detectCharacterBodyBounds(referenceFrame, sourceImage, options);
+      if (refBounds && refBounds.bodyH > 0) {
+        refHeight = refBounds.bodyH;
+      }
+    }
+
+    if (!refHeight || refHeight <= 0) {
+      return { success: false, scale: targetFrame.scale || 1.0, refHeight: 0, targetHeight: 0 };
+    }
+
+    // 获取目标帧身高
+    const targetBounds = (boundsMap && targetFrame.id)
+      ? boundsMap.get(targetFrame.id)
+      : this.detectCharacterBodyBounds(targetFrame, sourceImage, options);
+
+    if (!targetBounds || !targetBounds.bodyH || targetBounds.bodyH <= 0) {
+      return { success: false, scale: targetFrame.scale || 1.0, refHeight, targetHeight: 0 };
+    }
+
+    const targetHeight = targetBounds.bodyH;
+    let idealScale = refHeight / targetHeight;
+    idealScale = Math.max(0.2, Math.min(3.0, Math.round(idealScale * 100) / 100));
+
+    targetFrame.scale = idealScale;
+
+    return {
+      success: true,
+      scale: idealScale,
+      refHeight,
+      targetHeight
+    };
+  }
+
+  /**
+   * 批量将所有帧的身高统一自动缩放对齐
+   * @param {Array<Object>} frames 全部动作帧数组
+   * @param {HTMLImageElement|null} sourceImage
+   * @param {number} [referenceIndex=0] 基准帧索引 (默认第 0 帧)
+   * @param {Object} [options={}]
+   * @returns {{ normalizedCount: number, refHeight: number, scales: Array<{ id: string, scale: number }> }}
+   */
+  autoNormalizeAllScales(frames = [], sourceImage = null, referenceIndex = 0, options = {}) {
+    if (!Array.isArray(frames) || frames.length === 0) {
+      return { normalizedCount: 0, refHeight: 0, scales: [] };
+    }
+
+    const boundsMap = options.boundsMap || new Map();
+    if (!options.boundsMap) {
+      for (const f of frames) {
+        const b = this.detectCharacterBodyBounds(f, sourceImage, options);
+        if (b) boundsMap.set(f.id, b);
+      }
+    }
+
+    // 寻找有效基准帧
+    let refIndex = Math.max(0, Math.min(frames.length - 1, referenceIndex));
+    let refBounds = boundsMap.get(frames[refIndex]?.id);
+    if (!refBounds || !refBounds.bodyH) {
+      for (let i = 0; i < frames.length; i++) {
+        const b = boundsMap.get(frames[i].id);
+        if (b && b.bodyH > 0) {
+          refIndex = i;
+          refBounds = b;
+          break;
+        }
+      }
+    }
+
+    if (!refBounds || !refBounds.bodyH || refBounds.bodyH <= 0) {
+      return { normalizedCount: 0, refHeight: 0, scales: [] };
+    }
+
+    const refHeight = refBounds.bodyH;
+    const scales = [];
+    let normalizedCount = 0;
+
+    for (let i = 0; i < frames.length; i++) {
+      const f = frames[i];
+      if (i === refIndex) {
+        f.scale = 1.0;
+        scales.push({ id: f.id, scale: 1.0 });
+        normalizedCount++;
+        continue;
+      }
+
+      const res = this.autoNormalizeFrameScale(f, frames[refIndex], sourceImage, {
+        boundsMap,
+        referenceHeight: refHeight
+      });
+
+      if (res.success) {
+        scales.push({ id: f.id, scale: res.scale });
+        normalizedCount++;
+      } else {
+        scales.push({ id: f.id, scale: f.scale || 1.0 });
+      }
+    }
+
+    return {
+      normalizedCount,
+      refHeight,
+      scales
+    };
   }
 
   // ================= 3. 洋葱皮残影生成 (Onion Skinning Helper) =================
@@ -8457,6 +8706,8 @@ class SpriteAnimatorApp {
     this.btnScaleMinus = document.getElementById('btn-scale-minus');
     this.btnScalePlus = document.getElementById('btn-scale-plus');
     this.btnResetScale = document.getElementById('btn-reset-scale');
+    this.btnAutoScaleAll = document.getElementById('btn-auto-scale-all');
+    this.btnAutoScaleFrame = document.getElementById('btn-auto-scale-frame');
 
     // 播放器与视口控件
     this.btnPlayPause = document.getElementById('btn-play-pause');
@@ -8471,6 +8722,8 @@ class SpriteAnimatorApp {
     this.btnPrevFrame = document.getElementById('btn-prev-frame');
     this.btnNextFrame = document.getElementById('btn-next-frame');
     this.btnLastFrame = document.getElementById('btn-last-frame');
+    this.panelPlayer = document.getElementById('panel-player') || document.querySelector('.panel-player');
+    this.btnToggleFullscreenPlayer = document.getElementById('btn-toggle-fullscreen-player');
 
     // 背景透明化模态框元素
     this.modalRemoveBg = document.getElementById('modal-remove-bg');
@@ -8648,6 +8901,9 @@ class SpriteAnimatorApp {
   }
 
   bindEvents() {
+    // 侧边栏宽度自由拖拽调整
+    this.bindSidebarResizer();
+
     // 导入图片触发
     const triggerFileInput = () => this.fileInput && this.fileInput.click();
     if (this.btnImport) this.btnImport.addEventListener('click', triggerFileInput);
@@ -8994,14 +9250,56 @@ class SpriteAnimatorApp {
       });
     }
 
-    // 5. 键盘全局快捷键：
+    // 5. 播放器大屏全屏模式切换
+    if (this.btnToggleFullscreenPlayer && this.panelPlayer) {
+      this.btnToggleFullscreenPlayer.addEventListener('click', () => {
+        const isFullscreen = this.panelPlayer.classList.toggle('fullscreen-mode');
+        if (isFullscreen) {
+          this.playerCanvas.width = 640;
+          this.playerCanvas.height = 500;
+          this.btnToggleFullscreenPlayer.title = '退出大屏视口 (Esc)';
+          this.btnToggleFullscreenPlayer.classList.add('active');
+          this.setStatus('已进入大屏视口预览模式 (按 Esc 或再次点击退出)');
+        } else {
+          this.playerCanvas.width = 460;
+          this.playerCanvas.height = 380;
+          this.btnToggleFullscreenPlayer.title = '最大化 / 展开大屏视口预览';
+          this.btnToggleFullscreenPlayer.classList.remove('active');
+          this.setStatus('已恢复标准侧边栏视口预览');
+        }
+        this.renderPlayerViewport();
+        if (this.player && this.player.isPlaying) {
+          this.player.render();
+        }
+      });
+    }
+
+    // 6. 键盘全局快捷键：
     //    - 空格键 (Space): 播放/暂停切换
+    //    - Esc 键: 退出播放器全屏模式
     //    - 逗号 (,) / 左箭头 (ArrowLeft, 暂停时且无 Shift): 上一帧
     //    - 句号 (.) / 右箭头 (ArrowRight, 暂停时且无 Shift): 下一帧
     //    - 方向键 (ArrowUp/Down/Left/Right 配合 Shift 或单独上下键): 1px / 10px 偏移量微调
     window.addEventListener('keydown', (e) => {
       const tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // 按 Esc 退出大屏视口预览
+      if (e.key === 'Escape' && this.panelPlayer && this.panelPlayer.classList.contains('fullscreen-mode')) {
+        this.panelPlayer.classList.remove('fullscreen-mode');
+        this.playerCanvas.width = 460;
+        this.playerCanvas.height = 380;
+        if (this.btnToggleFullscreenPlayer) {
+          this.btnToggleFullscreenPlayer.title = '最大化 / 展开大屏视口预览';
+          this.btnToggleFullscreenPlayer.classList.remove('active');
+        }
+        this.renderPlayerViewport();
+        if (this.player && this.player.isPlaying) {
+          this.player.render();
+        }
+        this.setStatus('已退出大屏视口预览');
+        return;
+      }
 
       // 空格键：播放/暂停切换
       if (e.code === 'Space') {
@@ -9197,6 +9495,18 @@ class SpriteAnimatorApp {
       });
     }
 
+    // 2.4 一键智能自动身高校准
+    if (this.btnAutoScaleAll) {
+      this.btnAutoScaleAll.addEventListener('click', () => {
+        this.handleAutoScale(true);
+      });
+    }
+    if (this.btnAutoScaleFrame) {
+      this.btnAutoScaleFrame.addEventListener('click', () => {
+        this.handleAutoScale(false);
+      });
+    }
+
     // 2.5 自动对齐、脚底贴地与归零快捷按钮（自定义位置可直接拖拽预览框角色）
     if (this.btnAlignAllXY) {
       this.btnAlignAllXY.addEventListener('click', () => {
@@ -9249,6 +9559,91 @@ class SpriteAnimatorApp {
 
     // 5. 帧视口 (playerCanvas) 红色十字准星拖拽与角色画面直接拖拽调整偏移交互
     this.bindPlayerCanvasPivotDrag();
+  }
+
+  /**
+   * 一键智能自动身高校准 (排除高空白色刀光等干扰，以第1帧为基准自动对齐人物身量比例)
+   * @param {boolean} all - true: 校准全部帧; false: 仅校准当前选中帧
+   */
+  handleAutoScale(all = true) {
+    const sourceImage = state.get('sourceImage');
+    const frames = state.get('frames') || [];
+    if (!sourceImage || frames.length === 0) {
+      this.setStatus('请先导入图像并添加或识别动作选框');
+      this.showToast('请先导入图像并添加动作选框', 'warning');
+      return;
+    }
+
+    if (all) {
+      if (frames.length < 2) {
+        this.setStatus('帧数量少于 2 帧，无需执行跨帧身高校准');
+        return;
+      }
+
+      this.setStatus('正在智能计算并校准全部动作帧人物身量比例...');
+      const result = frameAlignment.autoNormalizeAllScales(frames, sourceImage, 0);
+
+      if (result.normalizedCount > 0) {
+        // 同步更新每帧的 scale 属性到 state
+        frames.forEach(f => {
+          state.updateFrame(f.id, { scale: f.scale || 1.0 });
+        });
+
+        // 更新当前选中帧的 UI 控件
+        const curFrame = state.getSelectedFrame();
+        if (curFrame) {
+          this.updateOffsetUI(curFrame);
+        }
+
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.renderFrameList();
+
+        const msg = `🎯 身高校准完毕: 以第1帧 (${result.refHeight}px) 为基准，已成功自动对齐全部 ${result.normalizedCount} 帧的角色身量！`;
+        this.setStatus(msg);
+        this.showToast(msg, 'success');
+      } else {
+        this.setStatus('身高校准失败: 未能从帧画面中提取到有效角色躯干高度');
+        this.showToast('未能提取到有效角色高度，请确认画面内容', 'warning');
+      }
+    } else {
+      // 仅校准当前选中帧
+      const curFrame = state.getSelectedFrame();
+      if (!curFrame) {
+        this.setStatus('请先在动作帧列表中选择一个目标帧');
+        this.showToast('请先选择一个动作帧', 'warning');
+        return;
+      }
+
+      const refFrame = frames[0];
+      if (curFrame.id === refFrame.id) {
+        curFrame.scale = 1.0;
+        state.updateFrame(curFrame.id, { scale: 1.0 });
+        this.updateOffsetUI(curFrame);
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.renderFrameList();
+        this.setStatus('当前帧为第1帧基准帧，缩放比例已设为 100%');
+        return;
+      }
+
+      const res = frameAlignment.autoNormalizeFrameScale(curFrame, refFrame, sourceImage);
+      if (res.success) {
+        state.updateFrame(curFrame.id, { scale: res.scale });
+        this.updateOffsetUI(curFrame);
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.renderFrameList();
+
+        const percent = Math.round(res.scale * 100);
+        const msg = `📏 当前帧 [${curFrame.name}] 已校准: 躯干高度 ${res.targetHeight}px -> 基准 ${res.refHeight}px (比例设为 ${percent}%)`;
+        this.setStatus(msg);
+        this.showToast(`📏 成功校准当前帧人物比例为 ${percent}%`, 'success');
+      } else {
+        this.setStatus('当前帧身高校准失败: 未能识别有效躯干高度');
+        this.showToast('未能识别有效躯干高度', 'warning');
+      }
+    }
   }
 
   /**
@@ -10725,17 +11120,17 @@ class SpriteAnimatorApp {
 
       const thumbCanvas = document.createElement('canvas');
       thumbCanvas.className = 'frame-thumb-canvas';
-      thumbCanvas.width = 66;
-      thumbCanvas.height = 66;
+      thumbCanvas.width = 96;
+      thumbCanvas.height = 96;
       const tctx = thumbCanvas.getContext('2d');
 
       if (tctx && frame.rect.w > 0 && frame.rect.h > 0) {
         tctx.imageSmoothingEnabled = false;
-        const scale = Math.min(60 / frame.rect.w, 60 / frame.rect.h);
+        const scale = Math.min(88 / frame.rect.w, 88 / frame.rect.h);
         const dw = frame.rect.w * scale;
         const dh = frame.rect.h * scale;
-        const dx = (66 - dw) / 2;
-        const dy = (66 - dh) / 2;
+        const dx = (96 - dw) / 2;
+        const dy = (96 - dh) / 2;
 
         if (frame.maskCanvas) {
           tctx.drawImage(
@@ -10755,6 +11150,14 @@ class SpriteAnimatorApp {
       const badge = document.createElement('div');
       badge.className = 'frame-badge';
       badge.textContent = `${idx + 1}`;
+
+      // 若当前帧进行了缩放，在缩略图左下角显示醒目的缩放比例徽章
+      if (typeof frame.scale === 'number' && Math.round(frame.scale * 100) !== 100) {
+        const scalePill = document.createElement('div');
+        scalePill.style.cssText = 'position: absolute; bottom: 4px; left: 4px; font-size: 9px; font-weight: 700; background: rgba(58, 134, 255, 0.85); color: #fff; padding: 1px 4px; border-radius: 3px; font-family: var(--font-mono); pointer-events: none;';
+        scalePill.textContent = `${Math.round(frame.scale * 100)}%`;
+        thumbBox.appendChild(scalePill);
+      }
 
       // 缩略图右上角单帧删除小叉叉按钮
       const delBtn = document.createElement('button');
@@ -10971,6 +11374,68 @@ class SpriteAnimatorApp {
       toast.style.transform = 'translateY(-10px) scale(0.95)';
       setTimeout(() => toast.remove(), 250);
     }, 4000);
+  }
+
+  /**
+   * 绑定右侧面板自由拖拽拉伸宽度
+   */
+  bindSidebarResizer() {
+    const resizer = document.getElementById('sidebar-resizer');
+    const sidebar = document.getElementById('sidebar-panel');
+    if (!resizer || !sidebar) return;
+
+    // 从本地存储恢复上次设定的面板宽度
+    try {
+      const savedW = localStorage.getItem('sprite_animator_sidebar_w');
+      if (savedW) {
+        const numW = parseInt(savedW, 10);
+        if (numW >= 380 && numW <= 850) {
+          sidebar.style.width = `${numW}px`;
+        }
+      }
+    } catch (e) {}
+
+    let isDragging = false;
+    let startX = 0;
+    let startW = 0;
+
+    resizer.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startX = e.clientX;
+      startW = sidebar.getBoundingClientRect().width;
+      resizer.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const deltaX = startX - e.clientX;
+      let newW = Math.max(380, Math.min(850, Math.round(startW + deltaX)));
+      sidebar.style.width = `${newW}px`;
+
+      if (this.canvasWorkspace && typeof this.canvasWorkspace.handleResize === 'function') {
+        this.canvasWorkspace.handleResize();
+      }
+      this.renderPlayerViewport();
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try {
+        const currentW = Math.round(sidebar.getBoundingClientRect().width);
+        localStorage.setItem('sprite_animator_sidebar_w', String(currentW));
+      } catch (e) {}
+      if (this.canvasWorkspace && typeof this.canvasWorkspace.handleResize === 'function') {
+        this.canvasWorkspace.handleResize();
+      }
+      this.renderPlayerViewport();
+    });
   }
 
   initCanvas() {
