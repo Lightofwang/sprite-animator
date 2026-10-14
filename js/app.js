@@ -328,6 +328,9 @@ class SpriteAnimatorApp {
   }
 
   bindEvents() {
+    // 侧边栏宽度自由拖拽调整
+    this.bindSidebarResizer();
+
     // 导入图片触发
     const triggerFileInput = () => this.fileInput && this.fileInput.click();
     if (this.btnImport) this.btnImport.addEventListener('click', triggerFileInput);
@@ -2651,6 +2654,68 @@ class SpriteAnimatorApp {
       toast.style.transform = 'translateY(-10px) scale(0.95)';
       setTimeout(() => toast.remove(), 250);
     }, 4000);
+  }
+
+  /**
+   * 绑定右侧面板自由拖拽拉伸宽度
+   */
+  bindSidebarResizer() {
+    const resizer = document.getElementById('sidebar-resizer');
+    const sidebar = document.getElementById('sidebar-panel');
+    if (!resizer || !sidebar) return;
+
+    // 从本地存储恢复上次设定的面板宽度
+    try {
+      const savedW = localStorage.getItem('sprite_animator_sidebar_w');
+      if (savedW) {
+        const numW = parseInt(savedW, 10);
+        if (numW >= 380 && numW <= 850) {
+          sidebar.style.width = `${numW}px`;
+        }
+      }
+    } catch (e) {}
+
+    let isDragging = false;
+    let startX = 0;
+    let startW = 0;
+
+    resizer.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startX = e.clientX;
+      startW = sidebar.getBoundingClientRect().width;
+      resizer.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const deltaX = startX - e.clientX;
+      let newW = Math.max(380, Math.min(850, Math.round(startW + deltaX)));
+      sidebar.style.width = `${newW}px`;
+
+      if (this.canvasWorkspace && typeof this.canvasWorkspace.handleResize === 'function') {
+        this.canvasWorkspace.handleResize();
+      }
+      this.renderPlayerViewport();
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (!isDragging) return;
+      isDragging = false;
+      resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      try {
+        const currentW = Math.round(sidebar.getBoundingClientRect().width);
+        localStorage.setItem('sprite_animator_sidebar_w', String(currentW));
+      } catch (e) {}
+      if (this.canvasWorkspace && typeof this.canvasWorkspace.handleResize === 'function') {
+        this.canvasWorkspace.handleResize();
+      }
+      this.renderPlayerViewport();
+    });
   }
 
   initCanvas() {

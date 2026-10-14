@@ -448,15 +448,35 @@ body {
 
 /* 3. 右侧侧边栏 */
 .sidebar-panel {
-  width: 380px;
-  min-width: 340px;
-  max-width: 460px;
+  width: 480px;
+  min-width: 380px;
+  max-width: 850px;
   background-color: var(--bg-toolbar);
   border-left: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
   z-index: 15;
+}
+
+/* 侧边栏拖拽拉伸把手 */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 50;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer.dragging {
+  background: var(--accent-blue);
+  box-shadow: 0 0 8px rgba(58, 134, 255, 0.6);
 }
 
 /* 面板通用分栏卡片 */
