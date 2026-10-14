@@ -546,6 +546,8 @@ export class ImageProcessor {
     let allCount = 0;
     let bodySumX = 0;
     let bodyCount = 0;
+    let bodyMinY = actualH;
+    let bodyMaxY = -1;
 
     for (let py = startY; py < endY; py++) {
       const rowOffset = py * imgW;
@@ -588,6 +590,8 @@ export class ImageProcessor {
           if (!isWhiteSlashEffect) {
             bodySumX += lx + 0.5;
             bodyCount++;
+            if (ly < bodyMinY) bodyMinY = ly;
+            if (ly > bodyMaxY) bodyMaxY = ly;
           }
         }
       }
@@ -599,6 +603,10 @@ export class ImageProcessor {
 
     const contentW = localMaxX - localMinX + 1;
     const contentH = localMaxY - localMinY + 1;
+    const hasDistinctBody = (bodyCount > allCount * 0.10 && bodyMinY <= bodyMaxY);
+    const finalBodyMinY = hasDistinctBody ? bodyMinY : localMinY;
+    const finalBodyMaxY = hasDistinctBody ? bodyMaxY : localMaxY;
+    const bodyH = finalBodyMaxY - finalBodyMinY + 1;
 
     // 二次扫描贴近脚底的接地层 (底部 8% 高度范围，排除白色刀光)，精准定位左脚与右脚水平位置
     const footBandH = Math.max(6, Math.min(30, Math.round(contentH * 0.08)));
@@ -662,6 +670,9 @@ export class ImageProcessor {
       rightGap: actualW - 1 - localMaxX,
       contentW,
       contentH,
+      bodyMinY: finalBodyMinY,
+      bodyMaxY: finalBodyMaxY,
+      bodyH,
       boxCenterX,
       massCenterX,
       bodyCenterX,

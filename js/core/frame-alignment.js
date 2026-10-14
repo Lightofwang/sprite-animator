@@ -4,6 +4,8 @@
  * 解决序列帧重心跳动与对齐问题，提供九宫格锚点系统、绝对像素锚点、键盘偏移微调与洋葱皮残影比对
  */
 
+import { ImageProcessor } from './image-processor.js';
+
 /**
  * 九宫格预设相对锚点定义
  * 包含键名、标准短代码、别名及相对帧尺寸的比例坐标 (0~1)
@@ -267,6 +269,185 @@ export class FrameAlignment {
     }
 
     return { ...frame.offset };
+  }
+
+  // ================= 2.8 智能身高校准与自动缩放 (Auto Scale) =================
+
+  /**
+   * 自动检测帧中角色的有效身体包围盒与骨架身高 (排除高空飞溅刀光)
+   * @param {Object} frame 帧对象
+   * @param {HTMLImageElement|CanvasImageSource|null} sourceImage 原始大图
+   * @param {Object} [options={}] 可选 mockImageData 或参数
+   * @returns {{ empty: boolean, bodyH: number, bodyMinY: number, bodyMaxY: number, contentW: number, contentH: number, bodyCenterX?: number, leftFootX?: number } | null}
+   */
+  detectCharacterBodyBounds(frame, sourceImage = null, options = {}) {
+    if (!frame || !frame.rect) return null;
+
+    // 若单元测试中传入 mockImageData 则优先使用
+    if (options.mockImageData) {
+      return ImageProcessor.getRectContentBounds(options.mockImageData, frame.rect, options);
+    }
+
+    // 优先从 maskCanvas 提取 ImageData
+    if (frame.maskCanvas && typeof frame.maskCanvas.getContext === 'function') {
+      try {
+        const mctx = frame.maskCanvas.getContext('2d');
+        const mData = mctx.getImageData(0, 0, frame.rect.w, frame.rect.h);
+        const b = ImageProcessor.getRectContentBounds(
+          mData,
+          { x: 0, y: 0, w: frame.rect.w, h: frame.rect.h },
+          { alphaThreshold: 15, tolerance: 25, ...options }
+        );
+        if (b && !b.empty) return b;
+      } catch (e) {
+        // 忽略离屏异常
+      }
+    }
+
+    // 从 sourceImage 提取 ImageData
+    if (sourceImage && typeof ImageProcessor.getImageDataFromImage === 'function') {
+      try {
+        const sourceImageData = ImageProcessor.getImageDataFromImage(sourceImage);
+        if (sourceImageData) {
+          const b = ImageProcessor.getRectContentBounds(sourceImageData, frame.rect, {
+            alphaThreshold: 15,
+            tolerance: 25,
+            ...options
+          });
+          if (b && !b.empty) return b;
+        }
+      } catch (e) {
+        // 忽略原图提取异常
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 单帧自动身高校准：根据基准帧的角色身高，自动计算并更新当前目标帧的 scale
+   * @param {Object} targetFrame 待校准的目标帧
+   * @param {Object} referenceFrame 参考基准帧 (通常为第 1 帧)
+   * @param {HTMLImageElement|null} sourceImage
+   * @param {Object} [options={}] { boundsMap, referenceHeight }
+   * @returns {{ success: boolean, scale: number, refHeight: number, targetHeight: number }}
+   */
+  autoNormalizeFrameScale(targetFrame, referenceFrame, sourceImage = null, options = {}) {
+    if (!targetFrame) return { success: false, scale: 1.0, refHeight: 0, targetHeight: 0 };
+
+    const boundsMap = options.boundsMap || null;
+
+    // 获取基准帧身高
+    let refHeight = (typeof options.referenceHeight === 'number' && options.referenceHeight > 0)
+      ? options.referenceHeight
+      : null;
+
+    if (!refHeight && referenceFrame) {
+      const refBounds = (boundsMap && referenceFrame.id)
+        ? boundsMap.get(referenceFrame.id)
+        : this.detectCharacterBodyBounds(referenceFrame, sourceImage, options);
+      if (refBounds && refBounds.bodyH > 0) {
+        refHeight = refBounds.bodyH;
+      }
+    }
+
+    if (!refHeight || refHeight <= 0) {
+      return { success: false, scale: targetFrame.scale || 1.0, refHeight: 0, targetHeight: 0 };
+    }
+
+    // 获取目标帧身高
+    const targetBounds = (boundsMap && targetFrame.id)
+      ? boundsMap.get(targetFrame.id)
+      : this.detectCharacterBodyBounds(targetFrame, sourceImage, options);
+
+    if (!targetBounds || !targetBounds.bodyH || targetBounds.bodyH <= 0) {
+      return { success: false, scale: targetFrame.scale || 1.0, refHeight, targetHeight: 0 };
+    }
+
+    const targetHeight = targetBounds.bodyH;
+    let idealScale = refHeight / targetHeight;
+    idealScale = Math.max(0.2, Math.min(3.0, Math.round(idealScale * 100) / 100));
+
+    targetFrame.scale = idealScale;
+
+    return {
+      success: true,
+      scale: idealScale,
+      refHeight,
+      targetHeight
+    };
+  }
+
+  /**
+   * 批量将所有帧的身高统一自动缩放对齐
+   * @param {Array<Object>} frames 全部动作帧数组
+   * @param {HTMLImageElement|null} sourceImage
+   * @param {number} [referenceIndex=0] 基准帧索引 (默认第 0 帧)
+   * @param {Object} [options={}]
+   * @returns {{ normalizedCount: number, refHeight: number, scales: Array<{ id: string, scale: number }> }}
+   */
+  autoNormalizeAllScales(frames = [], sourceImage = null, referenceIndex = 0, options = {}) {
+    if (!Array.isArray(frames) || frames.length === 0) {
+      return { normalizedCount: 0, refHeight: 0, scales: [] };
+    }
+
+    const boundsMap = options.boundsMap || new Map();
+    if (!options.boundsMap) {
+      for (const f of frames) {
+        const b = this.detectCharacterBodyBounds(f, sourceImage, options);
+        if (b) boundsMap.set(f.id, b);
+      }
+    }
+
+    // 寻找有效基准帧
+    let refIndex = Math.max(0, Math.min(frames.length - 1, referenceIndex));
+    let refBounds = boundsMap.get(frames[refIndex]?.id);
+    if (!refBounds || !refBounds.bodyH) {
+      for (let i = 0; i < frames.length; i++) {
+        const b = boundsMap.get(frames[i].id);
+        if (b && b.bodyH > 0) {
+          refIndex = i;
+          refBounds = b;
+          break;
+        }
+      }
+    }
+
+    if (!refBounds || !refBounds.bodyH || refBounds.bodyH <= 0) {
+      return { normalizedCount: 0, refHeight: 0, scales: [] };
+    }
+
+    const refHeight = refBounds.bodyH;
+    const scales = [];
+    let normalizedCount = 0;
+
+    for (let i = 0; i < frames.length; i++) {
+      const f = frames[i];
+      if (i === refIndex) {
+        f.scale = 1.0;
+        scales.push({ id: f.id, scale: 1.0 });
+        normalizedCount++;
+        continue;
+      }
+
+      const res = this.autoNormalizeFrameScale(f, frames[refIndex], sourceImage, {
+        boundsMap,
+        referenceHeight: refHeight
+      });
+
+      if (res.success) {
+        scales.push({ id: f.id, scale: res.scale });
+        normalizedCount++;
+      } else {
+        scales.push({ id: f.id, scale: f.scale || 1.0 });
+      }
+    }
+
+    return {
+      normalizedCount,
+      refHeight,
+      scales
+    };
   }
 
   // ================= 3. 洋葱皮残影生成 (Onion Skinning Helper) =================
