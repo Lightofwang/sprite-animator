@@ -140,6 +140,50 @@ it('calculateWorldRenderPos 应该正确返回 renderW, renderH, scale 字段', 
   assert.strictEqual(res.dy, 200 - 100 * 1.0 - 5);
 });
 
+// --- 测试组 3: AnimationPlayer 渲染集成 ---
+console.log('\n▶ [测试组 3] AnimationPlayer 缩放渲染与绘制测试:');
+
+it('AnimationPlayer.render 应该按 frame.scale 缩放尺寸调用 drawImage', async () => {
+  const { AnimationPlayer } = await import('../js/core/animation-player.js');
+
+  const drawnCalls = [];
+  const mockCanvas = {
+    width: 400,
+    height: 400,
+    getContext: () => ({
+      clearRect: () => {},
+      save: () => {},
+      restore: () => {},
+      drawImage: (...args) => {
+        drawnCalls.push(args);
+      }
+    })
+  };
+
+  const frame = {
+    rect: { x: 10, y: 10, w: 100, h: 100 },
+    pivot: { x: 0.5, y: 1.0 },
+    offset: { x: 0, y: 0 },
+    scale: 0.8 // 缩放为 80%
+  };
+
+  const player = new AnimationPlayer({
+    canvas: mockCanvas,
+    frames: [frame],
+    sourceImage: {}
+  });
+
+  player.render();
+
+  assert.strictEqual(drawnCalls.length, 1, '应该调用一次 drawImage');
+  const call = drawnCalls[0];
+  // drawImage(source, sx, sy, sw, sh, dx, dy, renderW, renderH)
+  const drawW = call[7];
+  const drawH = call[8];
+  assert.strictEqual(drawW, 80, '绘制宽度应该缩放为 100 * 0.8 = 80');
+  assert.strictEqual(drawH, 80, '绘制高度应该缩放为 100 * 0.8 = 80');
+});
+
 console.log('\n======================================================');
 console.log(`📊 测试完成: 共通过 ${passed} 项, 失败 ${failed} 项`);
 console.log('======================================================');

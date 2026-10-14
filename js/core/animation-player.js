@@ -542,22 +542,26 @@ export class AnimationPlayer {
     const ox = frame.offset ? (frame.offset.x || 0) : 0;
     const oy = frame.offset ? (frame.offset.y || 0) : 0;
 
+    const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+    const renderW = Math.round(w * s);
+    const renderH = Math.round(h * s);
+
     // 基准对齐点：水平居中，脚底基准线默认位于视口高度 82% 处
     const targetBaseX = options.targetBaseX !== undefined ? options.targetBaseX : Math.round(width / 2);
     const targetBaseY = options.targetBaseY !== undefined ? options.targetBaseY : Math.round(height * 0.82);
 
     // 计算实际绘制坐标
-    const dx = targetBaseX - w * px + ox;
-    const dy = targetBaseY - h * py + oy;
+    const dx = targetBaseX - renderW * px + ox;
+    const dy = targetBaseY - renderH * py + oy;
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;
 
     // 优先绘制经过交叉消除修复后的局部独立蒙版画布 frame.maskCanvas
     if (frame.maskCanvas) {
-      ctx.drawImage(frame.maskCanvas, 0, 0, w, h, dx, dy, w, h);
+      ctx.drawImage(frame.maskCanvas, 0, 0, w, h, dx, dy, renderW, renderH);
     } else if (sourceImage) {
-      ctx.drawImage(sourceImage, rect.x, rect.y, w, h, dx, dy, w, h);
+      ctx.drawImage(sourceImage, rect.x, rect.y, w, h, dx, dy, renderW, renderH);
     }
 
     ctx.restore();
