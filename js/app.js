@@ -130,6 +130,14 @@ class SpriteAnimatorApp {
     this.onionSkinToggle = document.getElementById('onion-skin-toggle');
     this.groundLineToggle = document.getElementById('ground-line-toggle');
 
+    // 单帧人物缩放控制
+    this.frameScaleSlider = document.getElementById('frame-scale-slider');
+    this.frameScaleInput = document.getElementById('frame-scale-input');
+    this.frameScaleDisplay = document.getElementById('frame-scale-display');
+    this.btnScaleMinus = document.getElementById('btn-scale-minus');
+    this.btnScalePlus = document.getElementById('btn-scale-plus');
+    this.btnResetScale = document.getElementById('btn-reset-scale');
+
     // 播放器与视口控件
     this.btnPlayPause = document.getElementById('btn-play-pause');
     this.playIcon = document.getElementById('play-icon');
@@ -803,6 +811,70 @@ class SpriteAnimatorApp {
     if (this.offsetYInput) {
       this.offsetYInput.addEventListener('input', handleOffsetChange);
       this.offsetYInput.addEventListener('change', handleOffsetChange);
+    }
+
+    // 2.3 单帧人物缩放比例 (Scale) 事件绑定
+    const handleScaleChange = (newPercent) => {
+      const selectedFrame = state.getSelectedFrame();
+      if (!selectedFrame) return;
+
+      const scale = frameAlignment.setScale(selectedFrame, newPercent / 100);
+      const percent = Math.round(scale * 100);
+
+      if (this.frameScaleSlider) this.frameScaleSlider.value = percent;
+      if (this.frameScaleInput) this.frameScaleInput.value = percent;
+      if (this.frameScaleDisplay) this.frameScaleDisplay.textContent = `${percent}%`;
+
+      state.updateFrame(selectedFrame.id, { scale });
+      this.renderMainCanvas();
+      this.renderPlayerViewport();
+      this.setStatus(`当前帧缩放比例已调整为: ${percent}%`);
+    };
+
+    if (this.frameScaleSlider) {
+      this.frameScaleSlider.addEventListener('input', (e) => {
+        handleScaleChange(parseFloat(e.target.value) || 100);
+      });
+    }
+
+    if (this.frameScaleInput) {
+      this.frameScaleInput.addEventListener('change', (e) => {
+        handleScaleChange(parseFloat(e.target.value) || 100);
+      });
+      this.frameScaleInput.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val >= 20 && val <= 300) {
+          handleScaleChange(val);
+        }
+      });
+    }
+
+    if (this.btnScaleMinus) {
+      this.btnScaleMinus.addEventListener('click', () => {
+        const selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) return;
+        const curScale = (typeof selectedFrame.scale === 'number') ? selectedFrame.scale : 1.0;
+        handleScaleChange(Math.round((curScale - 0.05) * 100));
+      });
+    }
+
+    if (this.btnScalePlus) {
+      this.btnScalePlus.addEventListener('click', () => {
+        const selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) return;
+        const curScale = (typeof selectedFrame.scale === 'number') ? selectedFrame.scale : 1.0;
+        handleScaleChange(Math.round((curScale + 0.05) * 100));
+      });
+    }
+
+    if (this.btnResetScale) {
+      this.btnResetScale.addEventListener('click', () => {
+        const selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) return;
+        frameAlignment.resetScale(selectedFrame);
+        handleScaleChange(100);
+        this.setStatus('已恢复当前帧缩放为 100% 原始尺寸');
+      });
     }
 
     // 2.5 自动对齐、脚底贴地与归零快捷按钮（自定义位置可直接拖拽预览框角色）
@@ -2463,6 +2535,18 @@ class SpriteAnimatorApp {
     }
     if (this.offsetYInput) {
       this.offsetYInput.value = frame?.offset ? (frame.offset.y || 0) : 0;
+    }
+
+    const scale = (frame && typeof frame.scale === 'number') ? frame.scale : 1.0;
+    const percent = Math.round(scale * 100);
+    if (this.frameScaleSlider) {
+      this.frameScaleSlider.value = percent;
+    }
+    if (this.frameScaleInput) {
+      this.frameScaleInput.value = percent;
+    }
+    if (this.frameScaleDisplay) {
+      this.frameScaleDisplay.textContent = `${percent}%`;
     }
   }
 

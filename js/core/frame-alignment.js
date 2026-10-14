@@ -341,9 +341,9 @@ export class FrameAlignment {
   renderFrameToContext(ctx, frame, sourceImage, targetBaseX, targetBaseY, options = {}) {
     if (!ctx || !frame || !frame.rect) return;
 
-    const { dx, dy } = this.calculateWorldRenderPos(frame, targetBaseX, targetBaseY);
+    const { dx, dy, renderW, renderH } = this.calculateWorldRenderPos(frame, targetBaseX, targetBaseY);
     const { w, h, x: sx, y: sy } = frame.rect;
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0 || renderW <= 0 || renderH <= 0) return;
 
     const alpha = typeof options.alpha === 'number' ? options.alpha : 1.0;
     const tint = options.tint || null;
@@ -360,32 +360,32 @@ export class FrameAlignment {
         // 创建临时染色离屏 Canvas (适用于洋葱皮红/蓝残影)
         try {
           const tintCanvas = document.createElement('canvas');
-          tintCanvas.width = w;
-          tintCanvas.height = h;
+          tintCanvas.width = renderW;
+          tintCanvas.height = renderH;
           const tctx = tintCanvas.getContext('2d');
           tctx.imageSmoothingEnabled = false;
 
-          // 绘制原帧图像
+          // 绘制原帧图像并缩放至 renderW, renderH
           if (frame.maskCanvas) {
-            tctx.drawImage(frame.maskCanvas, 0, 0, w, h);
+            tctx.drawImage(frame.maskCanvas, 0, 0, w, h, 0, 0, renderW, renderH);
           } else {
-            tctx.drawImage(sourceImage, sx, sy, w, h, 0, 0, w, h);
+            tctx.drawImage(sourceImage, sx, sy, w, h, 0, 0, renderW, renderH);
           }
 
           // 叠加上色模式
           tctx.globalCompositeOperation = 'source-atop';
           tctx.fillStyle = tint;
-          tctx.fillRect(0, 0, w, h);
+          tctx.fillRect(0, 0, renderW, renderH);
 
           // 绘制上色后的残影
           ctx.drawImage(tintCanvas, dx, dy);
         } catch (e) {
           // 容错降级直接绘制原图
-          this._drawRawFrame(ctx, frame, sourceImage, dx, dy, w, h);
+          this._drawRawFrame(ctx, frame, sourceImage, dx, dy, renderW, renderH);
         }
       } else {
         // 无染色正常绘制
-        this._drawRawFrame(ctx, frame, sourceImage, dx, dy, w, h);
+        this._drawRawFrame(ctx, frame, sourceImage, dx, dy, renderW, renderH);
       }
     }
 
@@ -396,11 +396,15 @@ export class FrameAlignment {
    * 绘制原图切片
    * @private
    */
-  _drawRawFrame(ctx, frame, sourceImage, dx, dy, w, h) {
+  _drawRawFrame(ctx, frame, sourceImage, dx, dy, renderW, renderH) {
+    const { w, h, x, y } = frame.rect;
+    const targetW = (typeof renderW === 'number' && renderW > 0) ? renderW : w;
+    const targetH = (typeof renderH === 'number' && renderH > 0) ? renderH : h;
+
     if (frame.maskCanvas) {
-      ctx.drawImage(frame.maskCanvas, 0, 0, w, h, dx, dy, w, h);
+      ctx.drawImage(frame.maskCanvas, 0, 0, w, h, dx, dy, targetW, targetH);
     } else if (sourceImage) {
-      ctx.drawImage(sourceImage, frame.rect.x, frame.rect.y, w, h, dx, dy, w, h);
+      ctx.drawImage(sourceImage, x, y, w, h, dx, dy, targetW, targetH);
     }
   }
 
@@ -441,10 +445,14 @@ export class FrameAlignment {
       const ox = (f.offset && typeof f.offset.x === 'number') ? f.offset.x : 0;
       const oy = (f.offset && typeof f.offset.y === 'number') ? f.offset.y : 0;
 
-      const l = ox - w * px;
-      const r = ox + w * (1 - px);
-      const t = oy - h * py;
-      const b = oy + h * (1 - py);
+      const s = (typeof f.scale === 'number' && !isNaN(f.scale) && f.scale > 0) ? f.scale : 1.0;
+      const renderW = Math.round(w * s);
+      const renderH = Math.round(h * s);
+
+      const l = ox - renderW * px;
+      const r = ox + renderW * (1 - px);
+      const t = oy - renderH * py;
+      const b = oy + renderH * (1 - py);
 
       if (l < minLeft) minLeft = l;
       if (r > maxRight) maxRight = r;
@@ -653,7 +661,7 @@ export class FrameAlignment {
       if (showGround) {
         const hudX = 10;
         const hudY = 10;
-        const hudW = 140;
+        const hudW = 195;
         const hudH = 24;
 
         ctx.fillStyle = 'rgba(15, 17, 26, 0.85)';
@@ -675,17 +683,28 @@ export class FrameAlignment {
 
         // X 指示
         ctx.fillStyle = isXZero ? '#06d6a0' : '#ffb703';
-        const xStr = `X: ${curOx >= 0 ? '+' : ''}${curOx}`;
-        ctx.fillText(xStr, hudX + 8, hudY + 12);
+        const xStr = `X:${curOx >= 0 ? '+' : ''}${curOx}`;
+        ctx.fillText(xStr, hudX + 6, hudY + 12);
 
-        // 分隔竖线
+        // 分隔竖线 1
         ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.fillRect(hudX + 66, hudY + 4, 1, 16);
+        ctx.fillRect(hudX + 54, hudY + 4, 1, 16);
 
         // Y 指示
         ctx.fillStyle = isYZero ? '#06d6a0' : '#ffb703';
-        const yStr = `Y: ${curOy >= 0 ? '+' : ''}${curOy}`;
-        ctx.fillText(yStr, hudX + 76, hudY + 12);
+        const yStr = `Y:${curOy >= 0 ? '+' : ''}${curOy}`;
+        ctx.fillText(yStr, hudX + 62, hudY + 12);
+
+        // 分隔竖线 2
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.fillRect(hudX + 110, hudY + 4, 1, 16);
+
+        // Scale 缩放指示
+        const sVal = (typeof currentFrame.scale === 'number') ? currentFrame.scale : 1.0;
+        const sPercent = Math.round(sVal * 100);
+        ctx.fillStyle = (sPercent === 100) ? '#06d6a0' : '#3a86ff';
+        const sStr = `缩放:${sPercent}%`;
+        ctx.fillText(sStr, hudX + 118, hudY + 12);
       }
 
       ctx.restore();

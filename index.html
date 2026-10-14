@@ -256,6 +256,21 @@
               </div>
             </div>
 
+            <!-- 单帧人物缩放调节 -->
+            <div class="control-row" style="margin-top: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
+                <span class="label-title" title="调节当前帧角色的缩放比例，脚底始终保持贴地">人物缩放 (Scale)</span>
+                <span id="frame-scale-display" style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-yellow); font-weight: 600;">100%</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px; width: 100%;">
+                <input type="range" id="frame-scale-slider" min="50" max="150" step="1" value="100" style="flex: 1; accent-color: var(--accent-blue);" title="拖动无极调节角色大小 (50% ~ 150%)">
+                <input type="number" id="frame-scale-input" min="20" max="300" step="1" value="100" style="width: 48px; padding: 2px 4px; font-size: 11px; text-align: center; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;" title="直接输入百分比 (20% ~ 300%)">
+                <button class="btn btn-secondary btn-sm" id="btn-scale-minus" style="padding: 2px 5px; font-size: 10px;" title="微调缩小 5%">-5%</button>
+                <button class="btn btn-secondary btn-sm" id="btn-scale-plus" style="padding: 2px 5px; font-size: 10px;" title="微调放大 5%">+5%</button>
+                <button class="btn btn-secondary btn-sm" id="btn-reset-scale" style="padding: 2px 5px; font-size: 10px;" title="恢复默认 100% 原始尺寸">↺ 100%</button>
+              </div>
+            </div>
+
             <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
               <button class="btn btn-primary btn-sm" id="btn-align-all-xy" style="flex: 1; padding: 4px 6px; font-size: 11px;" title="一键按角色重心与地面线自动对齐全部帧，之后可在下方预览框直接鼠标拖拽自由微调">
                 🎯 全部自动对齐
