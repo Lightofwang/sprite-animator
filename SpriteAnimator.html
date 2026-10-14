@@ -1258,6 +1258,21 @@ body {
               </div>
             </div>
 
+            <!-- 单帧人物缩放调节 -->
+            <div class="control-row" style="margin-top: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
+                <span class="label-title" title="调节当前帧角色的缩放比例，脚底始终保持贴地">人物缩放 (Scale)</span>
+                <span id="frame-scale-display" style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-yellow); font-weight: 600;">100%</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 4px; width: 100%;">
+                <input type="range" id="frame-scale-slider" min="50" max="150" step="1" value="100" style="flex: 1; accent-color: var(--accent-blue);" title="拖动无极调节角色大小 (50% ~ 150%)">
+                <input type="number" id="frame-scale-input" min="20" max="300" step="1" value="100" style="width: 48px; padding: 2px 4px; font-size: 11px; text-align: center; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;" title="直接输入百分比 (20% ~ 300%)">
+                <button class="btn btn-secondary btn-sm" id="btn-scale-minus" style="padding: 2px 5px; font-size: 10px;" title="微调缩小 5%">-5%</button>
+                <button class="btn btn-secondary btn-sm" id="btn-scale-plus" style="padding: 2px 5px; font-size: 10px;" title="微调放大 5%">+5%</button>
+                <button class="btn btn-secondary btn-sm" id="btn-reset-scale" style="padding: 2px 5px; font-size: 10px;" title="恢复默认 100% 原始尺寸">↺ 100%</button>
+              </div>
+            </div>
+
             <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
               <button class="btn btn-primary btn-sm" id="btn-align-all-xy" style="flex: 1; padding: 4px 6px; font-size: 11px;" title="一键按角色重心与地面线自动对齐全部帧，之后可在下方预览框直接鼠标拖拽自由微调">
                 🎯 全部自动对齐
@@ -2454,6 +2469,7 @@ class StateStore {
       rect: frameData.rect ? { ...frameData.rect } : { x: 0, y: 0, w: 64, h: 64 },
       offset: frameData.offset ? { ...frameData.offset } : { x: 0, y: 0 },
       pivot: frameData.pivot ? { ...frameData.pivot } : { x: 0.5, y: 1.0 }, // 默认脚底水平居中
+      scale: (typeof frameData.scale === 'number' && !isNaN(frameData.scale) && frameData.scale > 0) ? frameData.scale : 1.0, // 缩放比例，默认 1.0
       maskCanvas: frameData.maskCanvas || null,
       customPixels: frameData.customPixels || null,
       duration: frameData.duration || Math.round(1000 / this._state.playerState.fps)
@@ -4218,29 +4234,76 @@ class FrameAlignment {
   }
 
   /**
-   * 根据帧尺寸、归一化锚点和 offset 偏移量，计算在世界视口或播放器基准点下绘制时的左上角实际渲染坐标
+   * 根据帧尺寸、缩放比例、归一化锚点和 offset 偏移量，计算在世界视口或播放器基准点下绘制时的左上角实际渲染坐标
    * 公式:
-   *   dx = targetBaseX - w * pivotX + offset.x
-   *   dy = targetBaseY - h * pivotY + offset.y
+   *   renderW = round(w * scale)
+   *   renderH = round(h * scale)
+   *   dx = targetBaseX - renderW * pivotX + offset.x
+   *   dy = targetBaseY - renderH * pivotY + offset.y
    * @param {Object} frame 帧对象
    * @param {number} targetBaseX 目标视口世界基准 X 坐标 (如画布中心)
    * @param {number} targetBaseY 目标视口世界基准 Y 坐标 (如地面高度)
-   * @returns {{dx: number, dy: number}} 左上角渲染坐标
+   * @returns {{dx: number, dy: number, renderW: number, renderH: number, scale: number}} 渲染坐标与尺寸
    */
   calculateWorldRenderPos(frame, targetBaseX, targetBaseY) {
-    if (!frame) return { dx: targetBaseX, dy: targetBaseY };
+    if (!frame) return { dx: targetBaseX, dy: targetBaseY, renderW: 0, renderH: 0, scale: 1.0 };
 
+    const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
     const w = frame.rect ? frame.rect.w : 0;
     const h = frame.rect ? frame.rect.h : 0;
+    const renderW = Math.round(w * s);
+    const renderH = Math.round(h * s);
+
     const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
     const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
     const ox = frame.offset ? (frame.offset.x || 0) : 0;
     const oy = frame.offset ? (frame.offset.y || 0) : 0;
 
-    const dx = targetBaseX - w * px + ox;
-    const dy = targetBaseY - h * py + oy;
+    const dx = targetBaseX - renderW * px + ox;
+    const dy = targetBaseY - renderH * py + oy;
 
-    return { dx, dy };
+    return { dx, dy, renderW, renderH, scale: s };
+  }
+
+  // ================= 1.5 缩放比例微调 (Frame Scale) =================
+
+  /**
+   * 设置当前帧的缩放比例
+   * @param {Object} frame 帧对象
+   * @param {number|string} scale 缩放比例数值 (如 1.0, 0.85)
+   * @returns {number} 规范化后的缩放值
+   */
+  setScale(frame, scale) {
+    if (!frame) throw new Error('[FrameAlignment] frame 不能为空');
+    let val = parseFloat(scale);
+    if (isNaN(val) || val <= 0) val = 1.0;
+    // 限制范围在 0.2 (20%) 到 3.0 (300%)
+    val = Math.max(0.2, Math.min(3.0, Math.round(val * 1000) / 1000));
+    frame.scale = val;
+    return frame.scale;
+  }
+
+  /**
+   * 增量微调帧的缩放比例
+   * @param {Object} frame 帧对象
+   * @param {number} delta 如 0.05 或 -0.05
+   * @returns {number}
+   */
+  nudgeScale(frame, delta) {
+    if (!frame) throw new Error('[FrameAlignment] frame 不能为空');
+    const current = (typeof frame.scale === 'number') ? frame.scale : 1.0;
+    return this.setScale(frame, current + delta);
+  }
+
+  /**
+   * 重置帧缩放比例为 1.0 (100%)
+   * @param {Object} frame 帧对象
+   * @returns {number}
+   */
+  resetScale(frame) {
+    if (!frame) throw new Error('[FrameAlignment] frame 不能为空');
+    frame.scale = 1.0;
+    return 1.0;
   }
 
   // ================= 2. 位置微调 (Keyboard Nudge & Offset) =================
@@ -4398,9 +4461,9 @@ class FrameAlignment {
   renderFrameToContext(ctx, frame, sourceImage, targetBaseX, targetBaseY, options = {}) {
     if (!ctx || !frame || !frame.rect) return;
 
-    const { dx, dy } = this.calculateWorldRenderPos(frame, targetBaseX, targetBaseY);
+    const { dx, dy, renderW, renderH } = this.calculateWorldRenderPos(frame, targetBaseX, targetBaseY);
     const { w, h, x: sx, y: sy } = frame.rect;
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0 || renderW <= 0 || renderH <= 0) return;
 
     const alpha = typeof options.alpha === 'number' ? options.alpha : 1.0;
     const tint = options.tint || null;
@@ -4417,32 +4480,32 @@ class FrameAlignment {
         // 创建临时染色离屏 Canvas (适用于洋葱皮红/蓝残影)
         try {
           const tintCanvas = document.createElement('canvas');
-          tintCanvas.width = w;
-          tintCanvas.height = h;
+          tintCanvas.width = renderW;
+          tintCanvas.height = renderH;
           const tctx = tintCanvas.getContext('2d');
           tctx.imageSmoothingEnabled = false;
 
-          // 绘制原帧图像
+          // 绘制原帧图像并缩放至 renderW, renderH
           if (frame.maskCanvas) {
-            tctx.drawImage(frame.maskCanvas, 0, 0, w, h);
+            tctx.drawImage(frame.maskCanvas, 0, 0, w, h, 0, 0, renderW, renderH);
           } else {
-            tctx.drawImage(sourceImage, sx, sy, w, h, 0, 0, w, h);
+            tctx.drawImage(sourceImage, sx, sy, w, h, 0, 0, renderW, renderH);
           }
 
           // 叠加上色模式
           tctx.globalCompositeOperation = 'source-atop';
           tctx.fillStyle = tint;
-          tctx.fillRect(0, 0, w, h);
+          tctx.fillRect(0, 0, renderW, renderH);
 
           // 绘制上色后的残影
           ctx.drawImage(tintCanvas, dx, dy);
         } catch (e) {
           // 容错降级直接绘制原图
-          this._drawRawFrame(ctx, frame, sourceImage, dx, dy, w, h);
+          this._drawRawFrame(ctx, frame, sourceImage, dx, dy, renderW, renderH);
         }
       } else {
         // 无染色正常绘制
-        this._drawRawFrame(ctx, frame, sourceImage, dx, dy, w, h);
+        this._drawRawFrame(ctx, frame, sourceImage, dx, dy, renderW, renderH);
       }
     }
 
@@ -4453,11 +4516,15 @@ class FrameAlignment {
    * 绘制原图切片
    * @private
    */
-  _drawRawFrame(ctx, frame, sourceImage, dx, dy, w, h) {
+  _drawRawFrame(ctx, frame, sourceImage, dx, dy, renderW, renderH) {
+    const { w, h, x, y } = frame.rect;
+    const targetW = (typeof renderW === 'number' && renderW > 0) ? renderW : w;
+    const targetH = (typeof renderH === 'number' && renderH > 0) ? renderH : h;
+
     if (frame.maskCanvas) {
-      ctx.drawImage(frame.maskCanvas, 0, 0, w, h, dx, dy, w, h);
+      ctx.drawImage(frame.maskCanvas, 0, 0, w, h, dx, dy, targetW, targetH);
     } else if (sourceImage) {
-      ctx.drawImage(sourceImage, frame.rect.x, frame.rect.y, w, h, dx, dy, w, h);
+      ctx.drawImage(sourceImage, x, y, w, h, dx, dy, targetW, targetH);
     }
   }
 
@@ -4498,10 +4565,14 @@ class FrameAlignment {
       const ox = (f.offset && typeof f.offset.x === 'number') ? f.offset.x : 0;
       const oy = (f.offset && typeof f.offset.y === 'number') ? f.offset.y : 0;
 
-      const l = ox - w * px;
-      const r = ox + w * (1 - px);
-      const t = oy - h * py;
-      const b = oy + h * (1 - py);
+      const s = (typeof f.scale === 'number' && !isNaN(f.scale) && f.scale > 0) ? f.scale : 1.0;
+      const renderW = Math.round(w * s);
+      const renderH = Math.round(h * s);
+
+      const l = ox - renderW * px;
+      const r = ox + renderW * (1 - px);
+      const t = oy - renderH * py;
+      const b = oy + renderH * (1 - py);
 
       if (l < minLeft) minLeft = l;
       if (r > maxRight) maxRight = r;
@@ -4710,7 +4781,7 @@ class FrameAlignment {
       if (showGround) {
         const hudX = 10;
         const hudY = 10;
-        const hudW = 140;
+        const hudW = 195;
         const hudH = 24;
 
         ctx.fillStyle = 'rgba(15, 17, 26, 0.85)';
@@ -4732,17 +4803,28 @@ class FrameAlignment {
 
         // X 指示
         ctx.fillStyle = isXZero ? '#06d6a0' : '#ffb703';
-        const xStr = `X: ${curOx >= 0 ? '+' : ''}${curOx}`;
-        ctx.fillText(xStr, hudX + 8, hudY + 12);
+        const xStr = `X:${curOx >= 0 ? '+' : ''}${curOx}`;
+        ctx.fillText(xStr, hudX + 6, hudY + 12);
 
-        // 分隔竖线
+        // 分隔竖线 1
         ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.fillRect(hudX + 66, hudY + 4, 1, 16);
+        ctx.fillRect(hudX + 54, hudY + 4, 1, 16);
 
         // Y 指示
         ctx.fillStyle = isYZero ? '#06d6a0' : '#ffb703';
-        const yStr = `Y: ${curOy >= 0 ? '+' : ''}${curOy}`;
-        ctx.fillText(yStr, hudX + 76, hudY + 12);
+        const yStr = `Y:${curOy >= 0 ? '+' : ''}${curOy}`;
+        ctx.fillText(yStr, hudX + 62, hudY + 12);
+
+        // 分隔竖线 2
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        ctx.fillRect(hudX + 110, hudY + 4, 1, 16);
+
+        // Scale 缩放指示
+        const sVal = (typeof currentFrame.scale === 'number') ? currentFrame.scale : 1.0;
+        const sPercent = Math.round(sVal * 100);
+        ctx.fillStyle = (sPercent === 100) ? '#06d6a0' : '#3a86ff';
+        const sStr = `缩放:${sPercent}%`;
+        ctx.fillText(sStr, hudX + 118, hudY + 12);
       }
 
       ctx.restore();
@@ -5300,22 +5382,26 @@ class AnimationPlayer {
     const ox = frame.offset ? (frame.offset.x || 0) : 0;
     const oy = frame.offset ? (frame.offset.y || 0) : 0;
 
+    const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+    const renderW = Math.round(w * s);
+    const renderH = Math.round(h * s);
+
     // 基准对齐点：水平居中，脚底基准线默认位于视口高度 82% 处
     const targetBaseX = options.targetBaseX !== undefined ? options.targetBaseX : Math.round(width / 2);
     const targetBaseY = options.targetBaseY !== undefined ? options.targetBaseY : Math.round(height * 0.82);
 
     // 计算实际绘制坐标
-    const dx = targetBaseX - w * px + ox;
-    const dy = targetBaseY - h * py + oy;
+    const dx = targetBaseX - renderW * px + ox;
+    const dy = targetBaseY - renderH * py + oy;
 
     ctx.save();
     ctx.imageSmoothingEnabled = false;
 
     // 优先绘制经过交叉消除修复后的局部独立蒙版画布 frame.maskCanvas
     if (frame.maskCanvas) {
-      ctx.drawImage(frame.maskCanvas, 0, 0, w, h, dx, dy, w, h);
+      ctx.drawImage(frame.maskCanvas, 0, 0, w, h, dx, dy, renderW, renderH);
     } else if (sourceImage) {
-      ctx.drawImage(sourceImage, rect.x, rect.y, w, h, dx, dy, w, h);
+      ctx.drawImage(sourceImage, rect.x, rect.y, w, h, dx, dy, renderW, renderH);
     }
 
     ctx.restore();
@@ -7711,8 +7797,9 @@ class Exporter {
 
     for (const frame of frames) {
       if (frame.rect) {
-        const fw = Math.max(1, Math.round(frame.rect.w || 1));
-        const fh = Math.max(1, Math.round(frame.rect.h || 1));
+        const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+        const fw = Math.max(1, Math.round((frame.rect.w || 1) * s));
+        const fh = Math.max(1, Math.round((frame.rect.h || 1) * s));
         if (fw > maxW) maxW = fw;
         if (fh > maxH) maxH = fh;
 
@@ -7764,8 +7851,9 @@ class Exporter {
       const cellX = padding + col * (cellW + padding);
       const cellY = padding + row * (cellH + padding);
 
-      const fw = Math.max(1, Math.round(frame.rect?.w || cellW));
-      const fh = Math.max(1, Math.round(frame.rect?.h || cellH));
+      const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+      const fw = Math.max(1, Math.round((frame.rect?.w || cellW) * s));
+      const fh = Math.max(1, Math.round((frame.rect?.h || cellH) * s));
 
       let destX = cellX + Math.round((cellW - fw) / 2);
       let destY = cellY + Math.round((cellH - fh) / 2);
@@ -7855,8 +7943,9 @@ class Exporter {
       let maxBottom = -Infinity;
 
       for (const f of frames) {
-        const fw = Math.max(1, Math.round(f.rect?.w || 32));
-        const fh = Math.max(1, Math.round(f.rect?.h || 32));
+        const s = (typeof f.scale === 'number' && !isNaN(f.scale) && f.scale > 0) ? f.scale : 1.0;
+        const fw = Math.max(1, Math.round((f.rect?.w || 32) * s));
+        const fh = Math.max(1, Math.round((f.rect?.h || 32) * s));
         if (fw > maxW) maxW = fw;
         if (fh > maxH) maxH = fh;
 
@@ -7879,8 +7968,9 @@ class Exporter {
 
       for (let i = 0; i < frames.length; i++) {
         const frame = frames[i];
-        const fw = Math.max(1, Math.round(frame.rect?.w || 32));
-        const fh = Math.max(1, Math.round(frame.rect?.h || 32));
+        const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+        const fw = Math.max(1, Math.round((frame.rect?.w || 32) * s));
+        const fh = Math.max(1, Math.round((frame.rect?.h || 32) * s));
         const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
         const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
         const ox = (options.bakeOffset !== false && frame.offset) ? (frame.offset.x || 0) : 0;
@@ -7891,12 +7981,15 @@ class Exporter {
         const dx = useUnionBounds ? (-minLeft + Math.round(ox - fw * px)) : ox;
         const dy = useUnionBounds ? (-minTop + Math.round(oy - fh * py)) : oy;
 
-        // 创建单帧透明 Canvas 并渲染修复及对齐偏移后的帧（完整容纳不裁切）
+        // 创建单帧透明 Canvas 并渲染修复及对齐偏移后的帧（完整容纳不裁切，缩放时采用高质量平滑插值）
         const singleCanvas = this.createCanvas(outW, outH);
         const ctx = singleCanvas.getContext('2d');
         if (ctx) {
           ctx.clearRect(0, 0, outW, outH);
-          ctx.imageSmoothingEnabled = false;
+          ctx.imageSmoothingEnabled = (s !== 1.0);
+          if (s !== 1.0 && 'imageSmoothingQuality' in ctx) {
+            ctx.imageSmoothingQuality = 'high';
+          }
           this.drawFrameToContext(ctx, frame, dx, dy, fw, fh, sourceImage);
         }
 
@@ -7914,13 +8007,14 @@ class Exporter {
           rect: {
             x: frame.rect?.x || 0,
             y: frame.rect?.y || 0,
-            w: fw,
-            h: fh
+            w: frame.rect?.w || fw,
+            h: frame.rect?.h || fh
           },
           exportSize: {
             w: outW,
             h: outH
           },
+          scale: s,
           offset: {
             x: frame.offset?.x || 0,
             y: frame.offset?.y || 0
@@ -8093,8 +8187,9 @@ class Exporter {
     let maxBottom = -Infinity;
 
     frames.forEach(frame => {
-      const fw = frame.rect?.w || 32;
-      const fh = frame.rect?.h || 32;
+      const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+      const fw = Math.round((frame.rect?.w || 32) * s);
+      const fh = Math.round((frame.rect?.h || 32) * s);
       const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
       const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
       const ox = (frame.offset && frame.offset.x) || 0;
@@ -8164,10 +8259,14 @@ class Exporter {
         const frame = frames[i];
         if (fctx) {
           fctx.clearRect(0, 0, width, height);
-          fctx.imageSmoothingEnabled = false;
+          const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+          fctx.imageSmoothingEnabled = (s !== 1.0 || scale !== 1.0);
+          if ((s !== 1.0 || scale !== 1.0) && 'imageSmoothingQuality' in fctx) {
+            fctx.imageSmoothingQuality = 'high';
+          }
 
-          const fw = frame.rect?.w || 32;
-          const fh = frame.rect?.h || 32;
+          const fw = Math.round((frame.rect?.w || 32) * s);
+          const fh = Math.round((frame.rect?.h || 32) * s);
           const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
           const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
           const ox = (frame.offset && frame.offset.x) || 0;
@@ -8350,6 +8449,14 @@ class SpriteAnimatorApp {
     this.btnResetOffset = document.getElementById('btn-reset-offset');
     this.onionSkinToggle = document.getElementById('onion-skin-toggle');
     this.groundLineToggle = document.getElementById('ground-line-toggle');
+
+    // 单帧人物缩放控制
+    this.frameScaleSlider = document.getElementById('frame-scale-slider');
+    this.frameScaleInput = document.getElementById('frame-scale-input');
+    this.frameScaleDisplay = document.getElementById('frame-scale-display');
+    this.btnScaleMinus = document.getElementById('btn-scale-minus');
+    this.btnScalePlus = document.getElementById('btn-scale-plus');
+    this.btnResetScale = document.getElementById('btn-reset-scale');
 
     // 播放器与视口控件
     this.btnPlayPause = document.getElementById('btn-play-pause');
@@ -9024,6 +9131,70 @@ class SpriteAnimatorApp {
     if (this.offsetYInput) {
       this.offsetYInput.addEventListener('input', handleOffsetChange);
       this.offsetYInput.addEventListener('change', handleOffsetChange);
+    }
+
+    // 2.3 单帧人物缩放比例 (Scale) 事件绑定
+    const handleScaleChange = (newPercent) => {
+      const selectedFrame = state.getSelectedFrame();
+      if (!selectedFrame) return;
+
+      const scale = frameAlignment.setScale(selectedFrame, newPercent / 100);
+      const percent = Math.round(scale * 100);
+
+      if (this.frameScaleSlider) this.frameScaleSlider.value = percent;
+      if (this.frameScaleInput) this.frameScaleInput.value = percent;
+      if (this.frameScaleDisplay) this.frameScaleDisplay.textContent = `${percent}%`;
+
+      state.updateFrame(selectedFrame.id, { scale });
+      this.renderMainCanvas();
+      this.renderPlayerViewport();
+      this.setStatus(`当前帧缩放比例已调整为: ${percent}%`);
+    };
+
+    if (this.frameScaleSlider) {
+      this.frameScaleSlider.addEventListener('input', (e) => {
+        handleScaleChange(parseFloat(e.target.value) || 100);
+      });
+    }
+
+    if (this.frameScaleInput) {
+      this.frameScaleInput.addEventListener('change', (e) => {
+        handleScaleChange(parseFloat(e.target.value) || 100);
+      });
+      this.frameScaleInput.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (!isNaN(val) && val >= 20 && val <= 300) {
+          handleScaleChange(val);
+        }
+      });
+    }
+
+    if (this.btnScaleMinus) {
+      this.btnScaleMinus.addEventListener('click', () => {
+        const selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) return;
+        const curScale = (typeof selectedFrame.scale === 'number') ? selectedFrame.scale : 1.0;
+        handleScaleChange(Math.round((curScale - 0.05) * 100));
+      });
+    }
+
+    if (this.btnScalePlus) {
+      this.btnScalePlus.addEventListener('click', () => {
+        const selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) return;
+        const curScale = (typeof selectedFrame.scale === 'number') ? selectedFrame.scale : 1.0;
+        handleScaleChange(Math.round((curScale + 0.05) * 100));
+      });
+    }
+
+    if (this.btnResetScale) {
+      this.btnResetScale.addEventListener('click', () => {
+        const selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) return;
+        frameAlignment.resetScale(selectedFrame);
+        handleScaleChange(100);
+        this.setStatus('已恢复当前帧缩放为 100% 原始尺寸');
+      });
     }
 
     // 2.5 自动对齐、脚底贴地与归零快捷按钮（自定义位置可直接拖拽预览框角色）
@@ -10684,6 +10855,18 @@ class SpriteAnimatorApp {
     }
     if (this.offsetYInput) {
       this.offsetYInput.value = frame?.offset ? (frame.offset.y || 0) : 0;
+    }
+
+    const scale = (frame && typeof frame.scale === 'number') ? frame.scale : 1.0;
+    const percent = Math.round(scale * 100);
+    if (this.frameScaleSlider) {
+      this.frameScaleSlider.value = percent;
+    }
+    if (this.frameScaleInput) {
+      this.frameScaleInput.value = percent;
+    }
+    if (this.frameScaleDisplay) {
+      this.frameScaleDisplay.textContent = `${percent}%`;
     }
   }
 
