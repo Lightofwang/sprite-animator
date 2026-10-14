@@ -168,8 +168,9 @@ export class Exporter {
 
     for (const frame of frames) {
       if (frame.rect) {
-        const fw = Math.max(1, Math.round(frame.rect.w || 1));
-        const fh = Math.max(1, Math.round(frame.rect.h || 1));
+        const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+        const fw = Math.max(1, Math.round((frame.rect.w || 1) * s));
+        const fh = Math.max(1, Math.round((frame.rect.h || 1) * s));
         if (fw > maxW) maxW = fw;
         if (fh > maxH) maxH = fh;
 
@@ -221,8 +222,9 @@ export class Exporter {
       const cellX = padding + col * (cellW + padding);
       const cellY = padding + row * (cellH + padding);
 
-      const fw = Math.max(1, Math.round(frame.rect?.w || cellW));
-      const fh = Math.max(1, Math.round(frame.rect?.h || cellH));
+      const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+      const fw = Math.max(1, Math.round((frame.rect?.w || cellW) * s));
+      const fh = Math.max(1, Math.round((frame.rect?.h || cellH) * s));
 
       let destX = cellX + Math.round((cellW - fw) / 2);
       let destY = cellY + Math.round((cellH - fh) / 2);
@@ -312,8 +314,9 @@ export class Exporter {
       let maxBottom = -Infinity;
 
       for (const f of frames) {
-        const fw = Math.max(1, Math.round(f.rect?.w || 32));
-        const fh = Math.max(1, Math.round(f.rect?.h || 32));
+        const s = (typeof f.scale === 'number' && !isNaN(f.scale) && f.scale > 0) ? f.scale : 1.0;
+        const fw = Math.max(1, Math.round((f.rect?.w || 32) * s));
+        const fh = Math.max(1, Math.round((f.rect?.h || 32) * s));
         if (fw > maxW) maxW = fw;
         if (fh > maxH) maxH = fh;
 
@@ -336,8 +339,9 @@ export class Exporter {
 
       for (let i = 0; i < frames.length; i++) {
         const frame = frames[i];
-        const fw = Math.max(1, Math.round(frame.rect?.w || 32));
-        const fh = Math.max(1, Math.round(frame.rect?.h || 32));
+        const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+        const fw = Math.max(1, Math.round((frame.rect?.w || 32) * s));
+        const fh = Math.max(1, Math.round((frame.rect?.h || 32) * s));
         const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
         const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
         const ox = (options.bakeOffset !== false && frame.offset) ? (frame.offset.x || 0) : 0;
@@ -348,12 +352,15 @@ export class Exporter {
         const dx = useUnionBounds ? (-minLeft + Math.round(ox - fw * px)) : ox;
         const dy = useUnionBounds ? (-minTop + Math.round(oy - fh * py)) : oy;
 
-        // 创建单帧透明 Canvas 并渲染修复及对齐偏移后的帧（完整容纳不裁切）
+        // 创建单帧透明 Canvas 并渲染修复及对齐偏移后的帧（完整容纳不裁切，缩放时采用高质量平滑插值）
         const singleCanvas = this.createCanvas(outW, outH);
         const ctx = singleCanvas.getContext('2d');
         if (ctx) {
           ctx.clearRect(0, 0, outW, outH);
-          ctx.imageSmoothingEnabled = false;
+          ctx.imageSmoothingEnabled = (s !== 1.0);
+          if (s !== 1.0 && 'imageSmoothingQuality' in ctx) {
+            ctx.imageSmoothingQuality = 'high';
+          }
           this.drawFrameToContext(ctx, frame, dx, dy, fw, fh, sourceImage);
         }
 
@@ -371,13 +378,14 @@ export class Exporter {
           rect: {
             x: frame.rect?.x || 0,
             y: frame.rect?.y || 0,
-            w: fw,
-            h: fh
+            w: frame.rect?.w || fw,
+            h: frame.rect?.h || fh
           },
           exportSize: {
             w: outW,
             h: outH
           },
+          scale: s,
           offset: {
             x: frame.offset?.x || 0,
             y: frame.offset?.y || 0
@@ -550,8 +558,9 @@ export class Exporter {
     let maxBottom = -Infinity;
 
     frames.forEach(frame => {
-      const fw = frame.rect?.w || 32;
-      const fh = frame.rect?.h || 32;
+      const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+      const fw = Math.round((frame.rect?.w || 32) * s);
+      const fh = Math.round((frame.rect?.h || 32) * s);
       const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
       const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
       const ox = (frame.offset && frame.offset.x) || 0;
@@ -621,10 +630,14 @@ export class Exporter {
         const frame = frames[i];
         if (fctx) {
           fctx.clearRect(0, 0, width, height);
-          fctx.imageSmoothingEnabled = false;
+          const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+          fctx.imageSmoothingEnabled = (s !== 1.0 || scale !== 1.0);
+          if ((s !== 1.0 || scale !== 1.0) && 'imageSmoothingQuality' in fctx) {
+            fctx.imageSmoothingQuality = 'high';
+          }
 
-          const fw = frame.rect?.w || 32;
-          const fh = frame.rect?.h || 32;
+          const fw = Math.round((frame.rect?.w || 32) * s);
+          const fh = Math.round((frame.rect?.h || 32) * s);
           const px = (frame.pivot && typeof frame.pivot.x === 'number') ? frame.pivot.x : 0.5;
           const py = (frame.pivot && typeof frame.pivot.y === 'number') ? frame.pivot.y : 1.0;
           const ox = (frame.offset && frame.offset.x) || 0;

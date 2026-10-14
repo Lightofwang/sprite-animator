@@ -184,6 +184,48 @@ it('AnimationPlayer.render 应该按 frame.scale 缩放尺寸调用 drawImage', 
   assert.strictEqual(drawH, 80, '绘制高度应该缩放为 100 * 0.8 = 80');
 });
 
+// --- 测试组 4: Exporter 导出器 scale 缩放重采样 ---
+console.log('\n▶ [测试组 4] Exporter 导出器 scale 缩放重采样测试:');
+
+it('calculateSpriteSheetLayout 应该根据各帧 scale 自动调整网格单元格大小', async () => {
+  const { Exporter } = await import('../js/core/exporter.js');
+
+  const frames = [
+    { rect: { x: 0, y: 0, w: 100, h: 100 }, scale: 1.0 },
+    { rect: { x: 100, y: 0, w: 100, h: 100 }, scale: 0.8 } // 缩放为 80x80
+  ];
+
+  const layout = Exporter.calculateSpriteSheetLayout(frames, { padding: 10, columns: 2 });
+  assert.strictEqual(layout.items.length, 2);
+  assert.strictEqual(layout.items[0].w, 100);
+  assert.strictEqual(layout.items[0].h, 100);
+  assert.strictEqual(layout.items[1].w, 80, '第 2 帧在新大图中的排版尺寸必须缩小为 80');
+  assert.strictEqual(layout.items[1].h, 80, '第 2 帧在新大图中的排版尺寸必须缩小为 80');
+});
+
+it('exportFramesAsZip 应该在 animation.json 中准确记录各帧 scale', async () => {
+  const { Exporter } = await import('../js/core/exporter.js');
+
+  const frames = [
+    { rect: { x: 0, y: 0, w: 60, h: 60 }, scale: 1.0 },
+    { rect: { x: 60, y: 0, w: 80, h: 80 }, scale: 0.75 } // 缩放到 60x60
+  ];
+
+  let savedJson = null;
+  const mockZip = {
+    file: (name, content) => {
+      if (name === 'animation.json') {
+        savedJson = JSON.parse(content);
+      }
+    },
+    generateAsync: async () => new Uint8Array(10)
+  };
+
+  const res = await Exporter.exportFramesAsZip(frames, { download: false });
+  assert.strictEqual(res.success, true);
+  assert.strictEqual(res.count, 2);
+});
+
 console.log('\n======================================================');
 console.log(`📊 测试完成: 共通过 ${passed} 项, 失败 ${failed} 项`);
 console.log('======================================================');
