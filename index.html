@@ -298,25 +298,24 @@
         </div>
       </section>
 
-      <!-- 步骤 3：🎯 人物缩放与身量对齐校准 (默认展开) -->
+      <!-- 步骤 3：🎯 人物缩放与位置对齐 (默认展开) -->
       <section class="flow-section" id="section-alignment" data-card-id="section-alignment">
         <div class="flow-section-header">
           <div class="flow-section-title">
             <span class="section-icon">🎯</span>
-            <span>步骤 3：人物缩放与身量对齐校准</span>
+            <span>步骤 3：人物缩放与位置对齐</span>
           </div>
           <div class="flow-section-actions">
-            <span class="flow-section-arrow" title="收起/展开人物缩放与对齐校准">▾</span>
+            <span class="flow-section-arrow" title="收起/展开人物缩放与位置对齐">▾</span>
           </div>
         </div>
         <div class="flow-section-body">
           <div class="alignment-scale-grid">
-            <!-- 左侧：人物缩放调节与身量校准 -->
+            <!-- 左侧：人物缩放调节与身量比对 -->
             <div class="flow-card-sub">
               <div class="flow-card-sub-title">
                 <span>📏 人物缩放 (Scale)</span>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <button class="btn btn-scale-badge" id="btn-suggest-scale" style="display: none;" title="点击直接应用智能推荐的身量比例">💡 建议 92%</button>
                   <span id="frame-scale-display" class="scale-display-badge">100%</span>
                 </div>
               </div>
@@ -355,16 +354,6 @@
                   <input type="checkbox" id="sync-all-scale-toggle">
                   <span class="toggle-text" style="color: #ffd166; font-weight: 600;">🔗 锁定全部帧同步</span>
                 </label>
-              </div>
-
-              <!-- 智能身高校准操作按钮组 -->
-              <div class="button-grid-2">
-                <button class="btn btn-primary btn-pro-action" id="btn-auto-scale-all" title="以第1帧为基准，智能排除刀光等高空特效，一键自动校准所有帧的人物身高比例">
-                  🎯 全部自动对齐身量
-                </button>
-                <button class="btn btn-secondary btn-pro-action" id="btn-auto-scale-frame" title="将当前选中帧的人物身高一键校准到与第1帧一致">
-                  📏 当前帧校准
-                </button>
               </div>
 
               <!-- 幽灵透光台对比 -->
@@ -417,19 +406,6 @@
                     </button>
                   </div>
                 </div>
-              </div>
-
-              <!-- 对齐操作大号按钮组 -->
-              <div class="button-grid-3">
-                <button class="btn btn-primary btn-pro-action" id="btn-align-all-xy" title="一键按角色重心与地面线自动对齐全部帧">
-                  🎯 全部对齐
-                </button>
-                <button class="btn btn-secondary btn-pro-action" id="btn-align-all-ground" title="仅将全部帧的最低像素贴合到地面基准线（保留现有X轴）">
-                  ⏬ 全部Y贴地
-                </button>
-                <button class="btn btn-secondary btn-pro-action" id="btn-align-frame-ground" title="将当前选中帧的最低像素贴合到地面基准线">
-                  ⏬ 当前帧贴地
-                </button>
               </div>
 
               <!-- 辅助线与洋葱皮开关 -->
@@ -601,14 +577,8 @@
           <span>智能过滤末尾无内容空白帧 (自动剔除全黑/全透明无人物方块)</span>
         </label>
 
-        <!-- 自动Y轴脚底对齐开关 -->
-        <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; color: var(--text-main);">
-          <input type="checkbox" id="grid-auto-align-y" checked style="accent-color: var(--accent-blue);">
-          <span>🎯 自动按角色真实脚底对齐 Y 轴地面线 (自动补偿每格底部空白高度差)</span>
-        </label>
-
         <div style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">
-          💡 提示：若某帧为跳跃腾空动作（如起跳帧），可在选中该帧后直接在右下角播放器中向上拖拽角色，或点击「↺ 归零」。
+          💡 提示：切片生成后可在上方「步骤 1」拖动选框微调位置（支持边缘与相邻吸附），并在「步骤 3」手动缩放和直接拖拽角色对齐。
         </div>
       </div>
       <div class="modal-footer">

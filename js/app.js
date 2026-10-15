@@ -116,7 +116,6 @@ class SpriteAnimatorApp {
     this.gridColsInput = document.getElementById('grid-cols-input');
     this.gridSliceSummary = document.getElementById('grid-slice-summary');
     this.gridFilterEmpty = document.getElementById('grid-filter-empty');
-    this.gridAutoAlignY = document.getElementById('grid-auto-align-y');
     this.gridPresetBtns = document.querySelectorAll('.grid-preset-btn');
 
     // 锚点与对齐控制
@@ -124,9 +123,6 @@ class SpriteAnimatorApp {
     this.pivotDots = document.querySelectorAll('.pivot-dot');
     this.offsetXInput = document.getElementById('offset-x');
     this.offsetYInput = document.getElementById('offset-y');
-    this.btnAlignAllXY = document.getElementById('btn-align-all-xy');
-    this.btnAlignFrameGround = document.getElementById('btn-align-frame-ground');
-    this.btnAlignAllGround = document.getElementById('btn-align-all-ground');
     this.btnResetOffset = document.getElementById('btn-reset-offset');
     this.onionSkinToggle = document.getElementById('onion-skin-toggle');
     this.ghostOverlayToggle = document.getElementById('ghost-overlay-toggle');
@@ -136,12 +132,9 @@ class SpriteAnimatorApp {
     this.frameScaleSlider = document.getElementById('frame-scale-slider');
     this.frameScaleInput = document.getElementById('frame-scale-input');
     this.frameScaleDisplay = document.getElementById('frame-scale-display');
-    this.btnSuggestScale = document.getElementById('btn-suggest-scale');
     this.btnScaleMinus = document.getElementById('btn-scale-minus');
     this.btnScalePlus = document.getElementById('btn-scale-plus');
     this.btnResetScale = document.getElementById('btn-reset-scale');
-    this.btnAutoScaleAll = document.getElementById('btn-auto-scale-all');
-    this.btnAutoScaleFrame = document.getElementById('btn-auto-scale-frame');
     this.scaleCompareCanvas = document.getElementById('scale-compare-canvas');
     this.scalePreviewGhostTag = document.getElementById('scale-preview-ghost-tag');
     this.scalePreviewCurrentTag = document.getElementById('scale-preview-current-tag');
@@ -1142,34 +1135,7 @@ class SpriteAnimatorApp {
       });
     }
 
-    // 2.4 一键智能自动身高校准
-    if (this.btnAutoScaleAll) {
-      this.btnAutoScaleAll.addEventListener('click', () => {
-        this.handleAutoScale(true);
-      });
-    }
-    if (this.btnAutoScaleFrame) {
-      this.btnAutoScaleFrame.addEventListener('click', () => {
-        this.handleAutoScale(false);
-      });
-    }
-
-    // 2.5 自动对齐、脚底贴地与归零快捷按钮（自定义位置可直接拖拽预览框角色）
-    if (this.btnAlignAllXY) {
-      this.btnAlignAllXY.addEventListener('click', () => {
-        this.handleAutoAlignGround(true, { alignX: true, alignY: true, xMode: 'body-center' });
-      });
-    }
-    if (this.btnAlignAllGround) {
-      this.btnAlignAllGround.addEventListener('click', () => {
-        this.handleAutoAlignGround(true, { alignX: false, alignY: true });
-      });
-    }
-    if (this.btnAlignFrameGround) {
-      this.btnAlignFrameGround.addEventListener('click', () => {
-        this.handleAutoAlignGround(false, { alignX: false, alignY: true });
-      });
-    }
+    // 2.4 归零偏移快捷按钮
     if (this.btnResetOffset) {
       this.btnResetOffset.addEventListener('click', () => {
         const selectedFrame = state.getSelectedFrame();
@@ -1213,233 +1179,8 @@ class SpriteAnimatorApp {
       });
     }
 
-    // 4.3 智能身量推荐按钮点击直接应用
-    if (this.btnSuggestScale) {
-      this.btnSuggestScale.addEventListener('click', () => {
-        const suggestedVal = parseFloat(this.btnSuggestScale.dataset.suggestedScale);
-        if (!isNaN(suggestedVal) && suggestedVal > 0) {
-          handleScaleChange(Math.round(suggestedVal * 100));
-          this.setStatus(`已应用智能推荐身量比例: ${Math.round(suggestedVal * 100)}%`);
-          this.btnSuggestScale.style.display = 'none';
-        }
-      });
-    }
-
     // 5. 帧视口 (playerCanvas) 红色十字准星拖拽与角色画面直接拖拽调整偏移交互
     this.bindPlayerCanvasPivotDrag();
-  }
-
-  /**
-   * 一键智能自动身高校准 (排除高空白色刀光等干扰，以第1帧为基准自动对齐人物身量比例)
-   * @param {boolean} all - true: 校准全部帧; false: 仅校准当前选中帧
-   */
-  handleAutoScale(all = true) {
-    const sourceImage = state.get('sourceImage');
-    const frames = state.get('frames') || [];
-    if (!sourceImage || frames.length === 0) {
-      this.setStatus('请先导入图像并添加或识别动作选框');
-      this.showToast('请先导入图像并添加动作选框', 'warning');
-      return;
-    }
-
-    if (all) {
-      if (frames.length < 2) {
-        this.setStatus('帧数量少于 2 帧，无需执行跨帧身高校准');
-        return;
-      }
-
-      this.setStatus('正在智能计算并校准全部动作帧人物身量比例...');
-      const result = frameAlignment.autoNormalizeAllScales(frames, sourceImage, 0);
-
-      if (result.normalizedCount > 0) {
-        // 同步更新每帧的 scale 属性到 state
-        frames.forEach(f => {
-          state.updateFrame(f.id, { scale: f.scale || 1.0 });
-        });
-
-        // 更新当前选中帧的 UI 控件
-        const curFrame = state.getSelectedFrame();
-        if (curFrame) {
-          this.updateOffsetUI(curFrame);
-        }
-
-        this.renderMainCanvas();
-        this.renderPlayerViewport();
-        this.renderFrameList();
-
-        const msg = `🎯 身高校准完毕: 以第1帧 (${result.refHeight}px) 为基准，已成功自动对齐全部 ${result.normalizedCount} 帧的角色身量！`;
-        this.setStatus(msg);
-        this.showToast(msg, 'success');
-      } else {
-        this.setStatus('身高校准失败: 未能从帧画面中提取到有效角色躯干高度');
-        this.showToast('未能提取到有效角色高度，请确认画面内容', 'warning');
-      }
-    } else {
-      // 仅校准当前选中帧
-      const curFrame = state.getSelectedFrame();
-      if (!curFrame) {
-        this.setStatus('请先在动作帧列表中选择一个目标帧');
-        this.showToast('请先选择一个动作帧', 'warning');
-        return;
-      }
-
-      const refFrame = frames[0];
-      if (curFrame.id === refFrame.id) {
-        curFrame.scale = 1.0;
-        state.updateFrame(curFrame.id, { scale: 1.0 });
-        this.updateOffsetUI(curFrame);
-        this.renderMainCanvas();
-        this.renderPlayerViewport();
-        this.renderFrameList();
-        this.setStatus('当前帧为第1帧基准帧，缩放比例已设为 100%');
-        return;
-      }
-
-      const res = frameAlignment.autoNormalizeFrameScale(curFrame, refFrame, sourceImage);
-      if (res.success) {
-        state.updateFrame(curFrame.id, { scale: res.scale });
-        this.updateOffsetUI(curFrame);
-        this.renderMainCanvas();
-        this.renderPlayerViewport();
-        this.renderFrameList();
-
-        const percent = Math.round(res.scale * 100);
-        const msg = `📏 当前帧 [${curFrame.name}] 已校准: 躯干高度 ${res.targetHeight}px -> 基准 ${res.refHeight}px (比例设为 ${percent}%)`;
-        this.setStatus(msg);
-        this.showToast(`📏 成功校准当前帧人物比例为 ${percent}%`, 'success');
-      } else {
-        this.setStatus('当前帧身高校准失败: 未能识别有效躯干高度');
-        this.showToast('未能识别有效躯干高度', 'warning');
-      }
-    }
-  }
-
-  /**
-   * 自动扫描角色真实前景像素最低点（脚底）、左脚接地位置或角色躯干水平重心（排除白色刀光干扰），
-   * 自动补偿 offset.x / offset.y 使各帧角色精准对齐
-   * @param {boolean} alignAll - true: 一键对齐全部动作帧; false: 仅对齐当前选中帧
-   * @param {{ alignX?: boolean, alignY?: boolean, xMode?: 'left-foot'|'body-center'|'right-foot' }} [opts={ alignX: false, alignY: true }]
-   */
-  handleAutoAlignGround(alignAll = false, opts = {}) {
-    const sourceImage = state.get('sourceImage');
-    const frames = state.get('frames') || [];
-    if (!sourceImage || frames.length === 0) {
-      this.setStatus('请先导入图像并生成动作选框');
-      return;
-    }
-
-    const alignX = opts.alignX === true;
-    const alignY = opts.alignY !== false;
-    const xMode = opts.xMode || 'body-center';
-
-    const targets = alignAll ? frames : [state.getSelectedFrame()].filter(Boolean);
-    if (targets.length === 0) {
-      this.setStatus('请先选择一个动作帧');
-      return;
-    }
-
-    let sourceImageData = null;
-    try {
-      sourceImageData = ImageProcessor.getImageDataFromImage(sourceImage);
-    } catch (err) {
-      console.warn('[SpriteAnimator] 获取原图 ImageData 失败:', err);
-    }
-
-    const getFrameBounds = (frame) => {
-      if (!frame || !frame.rect) return null;
-      let b = null;
-      if (frame.maskCanvas && typeof frame.maskCanvas.getContext === 'function') {
-        try {
-          const mctx = frame.maskCanvas.getContext('2d');
-          const mData = mctx.getImageData(0, 0, frame.rect.w, frame.rect.h);
-          b = ImageProcessor.getRectContentBounds(
-            mData,
-            { x: 0, y: 0, w: frame.rect.w, h: frame.rect.h },
-            { alphaThreshold: 15, tolerance: 25 }
-          );
-        } catch (e) {
-          b = null;
-        }
-      }
-      if (!b && sourceImageData) {
-        b = ImageProcessor.getRectContentBounds(sourceImageData, frame.rect, {
-          alphaThreshold: 15,
-          tolerance: 25
-        });
-      }
-      return (b && !b.empty) ? b : null;
-    };
-
-    const boundsMap = new Map();
-    for (const f of frames) {
-      const b = getFrameBounds(f);
-      if (b) boundsMap.set(f.id, b);
-    }
-
-    // 计算 X 轴对齐的目标参考基准位置 referenceX：
-    // - 全部对齐时：取所有帧左脚(或重心)在各自选框内的平均位置，使所有帧就地对齐，绝不会把人物整体推向右侧导致刀光出画框！
-    // - 单帧对齐时：若存在前一帧，直接对齐到前一帧左脚(或重心)所在的实际水平位置！
-    let referenceX = undefined;
-    if (alignX) {
-      if (alignAll) {
-        let sumX = 0;
-        let cnt = 0;
-        for (const f of targets) {
-          const b = boundsMap.get(f.id);
-          if (!b) continue;
-          const val = (xMode === 'left-foot') ? b.leftFootX : b.bodyCenterX;
-          if (typeof val === 'number') {
-            sumX += val;
-            cnt++;
-          }
-        }
-        if (cnt > 0) referenceX = sumX / cnt;
-      } else if (targets.length === 1) {
-        const curFrame = targets[0];
-        const curIdx = frames.findIndex(f => f.id === curFrame.id);
-        if (curIdx > 0) {
-          const prevFrame = frames[curIdx - 1];
-          const prevB = boundsMap.get(prevFrame.id);
-          if (prevB) {
-            const prevLocalX = (xMode === 'left-foot') ? prevB.leftFootX : prevB.bodyCenterX;
-            const prevOx = prevFrame.offset?.x || 0;
-            referenceX = prevLocalX + prevOx;
-          }
-        }
-      }
-    }
-
-    let alignedCount = 0;
-    for (const frame of targets) {
-      const bounds = boundsMap.get(frame.id);
-      if (bounds) {
-        frameAlignment.autoAlignFrameToGround(frame, bounds, {
-          alignX,
-          alignY,
-          xMode,
-          referenceX
-        });
-        alignedCount++;
-      }
-    }
-
-    // 触发状态与界面刷新
-    state.setState({ frames: [...frames] });
-    const selectedFrame = state.getSelectedFrame();
-    this.updateOffsetUI(selectedFrame);
-    this.renderMainCanvas();
-    this.renderPlayerViewport();
-
-    if (alignAll) {
-      const modeDesc = alignX
-        ? (xMode === 'left-foot' ? '左脚基准与地面线' : '角色中心与地面线')
-        : 'Y 轴脚底地面线';
-      const msg = `已完成全部 ${alignedCount} 帧 [${modeDesc}] 自动对齐！(拖拽预览画面仅平移位置，绝不改变大小)`;
-      this.setStatus(msg);
-      this.showToast(`全部 ${alignedCount} 帧已按 [${modeDesc}] 原位对齐，刀光完整保留在画框内！`, 'success');
-    } else if (selectedFrame) {
-      this.setStatus(`已将 [${selectedFrame.name}] 对齐至基准位置 (X偏移 = ${selectedFrame.offset?.x || 0}px, Y偏移 = ${selectedFrame.offset?.y || 0}px)`);
-    }
   }
 
   /**
@@ -2588,13 +2329,12 @@ class SpriteAnimatorApp {
         const cellH = Math.max(4, Math.floor(imgH / rows));
 
         const filterEmpty = this.gridFilterEmpty ? this.gridFilterEmpty.checked : true;
-        const autoAlignY = this.gridAutoAlignY ? this.gridAutoAlignY.checked : true;
         let imageData = null;
-        if (filterEmpty || autoAlignY) {
+        if (filterEmpty) {
           try {
             imageData = ImageProcessor.getImageDataFromImage(sourceImage);
           } catch (e) {
-            console.warn('提取整图 ImageData 进行空白过滤/自动对齐失败:', e);
+            console.warn('提取整图 ImageData 进行空白过滤失败:', e);
           }
         }
 
@@ -2629,17 +2369,6 @@ class SpriteAnimatorApp {
               maskCanvas: null
             };
 
-            // 若勾选了自动按角色真实脚底对齐 Y 轴地面线
-            if (autoAlignY && imageData) {
-              const bounds = ImageProcessor.getRectContentBounds(imageData, rect, {
-                alphaThreshold: 15,
-                tolerance: 25
-              });
-              if (bounds && !bounds.empty) {
-                frameAlignment.autoAlignFrameToGround(frameObj, bounds, { alignX: false });
-              }
-            }
-
             newFrames.push(frameObj);
             count++;
           }
@@ -2657,8 +2386,7 @@ class SpriteAnimatorApp {
         this.renderMainCanvas();
 
         const filterMsg = filteredCount > 0 ? ` (已智能剔除 ${filteredCount} 帧空白背景)` : '';
-        const alignMsg = autoAlignY ? '，并已自动对齐全部帧 Y 轴脚底地面线' : '';
-        this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧${filterMsg}${alignMsg}，单帧规格 ${cellW} × ${cellH} px`);
+        this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧${filterMsg}，单帧规格 ${cellW} × ${cellH} px`);
       });
     }
   }
@@ -2999,50 +2727,8 @@ class SpriteAnimatorApp {
       this.frameScaleDisplay.textContent = `${percent}%`;
     }
 
-    // 智能更新当前帧身量建议徽章与实时微缩对比视口
-    this.updateScaleSuggestionUI(frame);
+    // 实时更新身量微缩对比视口
     this.renderScalePreviewViewport();
-  }
-
-  /**
-   * 智能更新当前帧身量缩放建议徽章 (Smart Suggestion Badge)
-   * 若检测到当前帧人物明显偏大或偏小，显示醒目的建议按钮，用户可一键精准采纳
-   * @param {Object|null} frame 
-   */
-  updateScaleSuggestionUI(frame) {
-    if (!this.btnSuggestScale) return;
-    if (!frame) {
-      this.btnSuggestScale.style.display = 'none';
-      return;
-    }
-
-    const frames = state.get('frames') || [];
-    const sourceImage = state.get('sourceImage');
-    if (!sourceImage || frames.length < 2 || frame.id === frames[0].id) {
-      this.btnSuggestScale.style.display = 'none';
-      return;
-    }
-
-    try {
-      const refFrame = frames[0];
-      const res = frameAlignment.autoNormalizeFrameScale(frame, refFrame, sourceImage);
-      if (res.success && typeof res.scale === 'number') {
-        const curScale = (typeof frame.scale === 'number') ? frame.scale : 1.0;
-        const curPercent = Math.round(curScale * 100);
-        const suggestedPercent = Math.round(res.scale * 100);
-
-        // 如果建议比例非 100% 且与当前设置有明显差异 (>= 3%)
-        if (suggestedPercent !== 100 && Math.abs(suggestedPercent - curPercent) >= 3) {
-          this.btnSuggestScale.style.display = 'inline-block';
-          this.btnSuggestScale.textContent = `💡 建议 ${suggestedPercent}%`;
-          this.btnSuggestScale.title = `智能检测到当前帧与基准帧身量偏差，点击一键应用 ${suggestedPercent}%`;
-          this.btnSuggestScale.dataset.suggestedScale = res.scale;
-          return;
-        }
-      }
-    } catch (_) {}
-
-    this.btnSuggestScale.style.display = 'none';
   }
 
   /**
