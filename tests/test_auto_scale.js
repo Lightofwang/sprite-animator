@@ -85,6 +85,40 @@ it('当存在向上飞溅的白色刀光时，应优先排除刀光并准确识�
   assert.strictEqual(bounds.bodyH, 120, `应排除刀光干扰，准确识别出角色本体身高 120 (实际: ${bounds.bodyH})`);
 });
 
+it('当存在高高举起的深色长矛/刀柄 (非白色细杆) 时，应排除细长杆并准确识别角色本体身高', () => {
+  // 画布 200x200, 顶部有 40px 深褐色长矛杆 (宽仅 4px, Y=10~49), 角色本体在 Y=50~149 (宽 60, 高 100)
+  const width = 200;
+  const height = 200;
+  const data = new Uint8ClampedArray(width * height * 4);
+  // 长矛木柄 (红棕色 R=140, G=40, B=40, 宽 4px)
+  for (let y = 10; y < 50; y++) {
+    for (let x = 80; x < 84; x++) {
+      const idx = (y * width + x) * 4;
+      data[idx] = 140;
+      data[idx + 1] = 40;
+      data[idx + 2] = 40;
+      data[idx + 3] = 255;
+    }
+  }
+  // 角色本体 (Y=50~149, 宽 60)
+  for (let y = 50; y < 150; y++) {
+    for (let x = 50; x < 110; x++) {
+      const idx = (y * width + x) * 4;
+      data[idx] = 180;
+      data[idx + 1] = 30;
+      data[idx + 2] = 30;
+      data[idx + 3] = 255;
+    }
+  }
+
+  const frame = { rect: { x: 0, y: 0, w: 200, h: 200 }, scale: 1.0 };
+  const bounds = alignment.detectCharacterBodyBounds(frame, null, { mockImageData: { width, height, data } });
+
+  assert.ok(bounds, '应成功检测到有效边界');
+  assert.strictEqual(bounds.bodyH, 100, `应排除细长木柄，准确识别角色本体身高为 100，实际为 ${bounds.bodyH}`);
+  assert.strictEqual(bounds.bodyMinY, 50, `角色头顶应定位在 Y=50，实际为 ${bounds.bodyMinY}`);
+});
+
 // --- 测试组 2: autoNormalizeFrameScale 单帧身高校准 ---
 console.log('\n▶ [测试组 2] autoNormalizeFrameScale 单帧自动对齐身量计算:');
 
@@ -120,6 +154,19 @@ it('面对偏小的第 3 帧 (高 100) 与基准帧 (高 120)，应计算出缩�
   assert.strictEqual(res.success, true);
   // 120 / 100 = 1.20
   assert.strictEqual(frame3.scale, 1.2, `第 3 帧缩放比应自动放大校准为 1.2，实际为 ${frame3.scale}`);
+});
+
+it('面对零星残影/空白碎片帧 (如高度不足基准 30%)，应安全防呆保持 scale=1.0', () => {
+  const frame1 = { id: 'f1', rect: { x: 0, y: 0, w: 200, h: 200 }, scale: 1.0 };
+  const frameDebris = { id: 'f_debris', rect: { x: 0, y: 0, w: 200, h: 200 }, scale: 1.0 };
+
+  const boundsMap = new Map();
+  boundsMap.set('f1', { bodyH: 120, bodyMinY: 40, bodyMaxY: 159 });
+  boundsMap.set('f_debris', { bodyH: 10, bodyMinY: 5, bodyMaxY: 14 }); // 只有 10px 的碎片
+
+  const res = alignment.autoNormalizeFrameScale(frameDebris, frame1, null, { boundsMap });
+  assert.strictEqual(res.success, false, '碎片帧应返回失败防呆');
+  assert.strictEqual(frameDebris.scale, 1.0, '碎片帧应保持 scale=1.0');
 });
 
 // --- 测试组 3: autoNormalizeAllScales 批量统一全帧身量 ---

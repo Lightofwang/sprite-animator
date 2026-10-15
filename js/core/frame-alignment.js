@@ -365,8 +365,20 @@ export class FrameAlignment {
     }
 
     const targetHeight = targetBounds.bodyH;
+
+    // 安全防呆：若目标帧检测出的身体高度不足基准帧的 30%（如碎片、残影或空白帧），不执行畸变放大
+    if (targetHeight < refHeight * 0.3) {
+      return {
+        success: false,
+        scale: targetFrame.scale || 1.0,
+        refHeight,
+        targetHeight,
+        reason: '目标帧未检测到有效完整角色躯干'
+      };
+    }
+
     let idealScale = refHeight / targetHeight;
-    idealScale = Math.max(0.2, Math.min(3.0, Math.round(idealScale * 100) / 100));
+    idealScale = Math.max(0.4, Math.min(2.5, Math.round(idealScale * 100) / 100));
 
     targetFrame.scale = idealScale;
 

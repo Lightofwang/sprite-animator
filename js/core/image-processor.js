@@ -546,12 +546,16 @@ export class ImageProcessor {
     let allCount = 0;
     let bodySumX = 0;
     let bodyCount = 0;
-    let bodyMinY = actualH;
-    let bodyMaxY = -1;
+
+    // 记录每一行非特效身体像素的最大连续实心线段长度，用于排除细长武器杆与高空飞溅
+    const maxSegW = new Int32Array(actualH);
 
     for (let py = startY; py < endY; py++) {
       const rowOffset = py * imgW;
       const ly = py - startY;
+      let curSeg = 0;
+      let rowMaxSeg = 0;
+
       for (let px = startX; px < endX; px++) {
         const pOffset = (rowOffset + px) * 4;
         const r = data[pOffset];
@@ -583,18 +587,27 @@ export class ImageProcessor {
           allSumX += lx + 0.5;
           allCount++;
 
-          // 判断是否为高亮纯白/灰白刀光特效像素 (RGB 均大于 210 且饱和度极低)
+          // 特效过滤：高光纯白或高亮浅灰/浅蓝刀光
+          // (亮度 > 160 且 饱和度 < 65，或 RGB 均大于 200)
           const maxC = Math.max(r, g, b);
           const minC = Math.min(r, g, b);
-          const isWhiteSlashEffect = (r > 210 && g > 210 && b > 210 && (maxC - minC) < 35);
-          if (!isWhiteSlashEffect) {
+          const sat = maxC - minC;
+          const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+          const isSlashEffect = (brightness > 160 && sat < 65) || (r > 200 && g > 200 && b > 200);
+
+          if (!isSlashEffect) {
             bodySumX += lx + 0.5;
             bodyCount++;
-            if (ly < bodyMinY) bodyMinY = ly;
-            if (ly > bodyMaxY) bodyMaxY = ly;
+            curSeg++;
+            if (curSeg > rowMaxSeg) rowMaxSeg = curSeg;
+          } else {
+            curSeg = 0;
           }
+        } else {
+          curSeg = 0;
         }
       }
+      maxSegW[ly] = rowMaxSeg;
     }
 
     if (localMaxX < 0 || localMaxY < 0 || allCount === 0) {
@@ -603,15 +616,84 @@ export class ImageProcessor {
 
     const contentW = localMaxX - localMinX + 1;
     const contentH = localMaxY - localMinY + 1;
-    const hasDistinctBody = (bodyCount > allCount * 0.10 && bodyMinY <= bodyMaxY);
-    const finalBodyMinY = hasDistinctBody ? bodyMinY : localMinY;
-    const finalBodyMaxY = hasDistinctBody ? bodyMaxY : localMaxY;
+
+    let globalMaxSeg = 0;
+    for (let i = 0; i < actualH; i++) {
+      if (maxSegW[i] > globalMaxSeg) globalMaxSeg = maxSegW[i];
+    }
+
+    let finalBodyMinY = localMinY;
+    let finalBodyMaxY = localMaxY;
+
+    // 智能提取角色实心躯干核心区间 (排除高高举起的细长长矛杆/刀柄与高空孤立孤岛)
+    if (globalMaxSeg >= 12 && bodyCount > allCount * 0.08) {
+      // 头部/躯干最小实心厚度阈值：
+      // 细长武器杆通常 < 10px，头盔红缨通常在 12~18px，胸甲 50~120px
+      const bodyThresh = Math.max(12, Math.floor(globalMaxSeg * 0.16));
+
+      // 统计所有连续满足 maxSegW >= bodyThresh 的垂直行区间 [s, e]
+      const intervals = [];
+      let inInt = false;
+      let s = 0;
+      for (let ly = 0; ly < actualH; ly++) {
+        if (maxSegW[ly] >= bodyThresh) {
+          if (!inInt) {
+            inInt = true;
+            s = ly;
+          }
+        } else {
+          if (inInt) {
+            inInt = false;
+            intervals.push({ s, e: ly - 1 });
+          }
+        }
+      }
+      if (inInt) {
+        intervals.push({ s, e: actualH - 1 });
+      }
+
+      if (intervals.length > 0) {
+        // 寻找包含最大体量 (总宽度积分) 的主体区间
+        let bestInterval = intervals[0];
+        let bestMass = 0;
+        for (const itv of intervals) {
+          let mass = 0;
+          for (let y = itv.s; y <= itv.e; y++) {
+            mass += maxSegW[y];
+          }
+          if (mass > bestMass) {
+            bestMass = mass;
+            bestInterval = itv;
+          }
+        }
+
+        let bodyS = bestInterval.s;
+        let bodyE = bestInterval.e;
+
+        const topThresh = Math.max(8, Math.floor(bodyThresh * 0.45));
+        const botThresh = Math.max(6, Math.floor(bodyThresh * 0.35));
+
+        // 向上延伸至头盔红缨/发顶 (允许最多向上延伸 8px，排除细长木柄)
+        while (bodyS > 0 && maxSegW[bodyS - 1] >= topThresh && (bestInterval.s - bodyS) < 8) {
+          bodyS--;
+        }
+
+        // 向下延伸至鞋跟/鞋尖
+        while (bodyE < actualH - 1 && maxSegW[bodyE + 1] >= botThresh && (bodyE - bestInterval.e) < 8) {
+          bodyE++;
+        }
+
+        finalBodyMinY = bodyS;
+        finalBodyMaxY = bodyE;
+      }
+    }
+
     const bodyH = finalBodyMaxY - finalBodyMinY + 1;
 
-    // 二次扫描贴近脚底的接地层 (底部 8% 高度范围，排除白色刀光)，精准定位左脚与右脚水平位置
+    // 二次扫描贴近脚底的接地层 (底部 8% 高度范围，排除白色刀光与高空杂色)，精准定位左脚与右脚水平位置
     const footBandH = Math.max(6, Math.min(30, Math.round(contentH * 0.08)));
-    const footStartY = startY + Math.max(localMinY, localMaxY - footBandH);
-    const footEndY = startY + localMaxY + 1;
+    const footStartY = startY + Math.max(finalBodyMinY, finalBodyMaxY - footBandH);
+    const footEndY = startY + finalBodyMaxY + 1;
     let footMinX = localMaxX;
     let footMaxX = localMinX;
     let foundFoot = false;
@@ -632,8 +714,10 @@ export class ImageProcessor {
         if (isFg) {
           const maxC = Math.max(r, g, b);
           const minC = Math.min(r, g, b);
-          const isWhiteSlash = (r > 210 && g > 210 && b > 210 && (maxC - minC) < 35);
-          if (!isWhiteSlash) {
+          const sat = maxC - minC;
+          const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+          const isSlash = (brightness > 160 && sat < 65) || (r > 200 && g > 200 && b > 200);
+          if (!isSlash) {
             const lx = px - startX;
             if (lx < footMinX) footMinX = lx;
             if (lx > footMaxX) footMaxX = lx;
