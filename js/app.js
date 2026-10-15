@@ -142,6 +142,9 @@ class SpriteAnimatorApp {
     this.btnResetScale = document.getElementById('btn-reset-scale');
     this.btnAutoScaleAll = document.getElementById('btn-auto-scale-all');
     this.btnAutoScaleFrame = document.getElementById('btn-auto-scale-frame');
+    this.scaleCompareCanvas = document.getElementById('scale-compare-canvas');
+    this.scalePreviewGhostTag = document.getElementById('scale-preview-ghost-tag');
+    this.scalePreviewCurrentTag = document.getElementById('scale-preview-current-tag');
 
     // 播放器与视口控件
     this.btnPlayPause = document.getElementById('btn-play-pause');
@@ -309,14 +312,19 @@ class SpriteAnimatorApp {
     const tctx = thumbCanvas.getContext('2d');
     if (!tctx) return;
 
-    tctx.clearRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+    const cw = thumbCanvas.width || 96;
+    const ch = thumbCanvas.height || 96;
+    tctx.clearRect(0, 0, cw, ch);
+
     if (frame.rect.w > 0 && frame.rect.h > 0) {
       tctx.imageSmoothingEnabled = false;
-      const scale = Math.min(60 / frame.rect.w, 60 / frame.rect.h);
-      const dw = frame.rect.w * scale;
-      const dh = frame.rect.h * scale;
-      const dx = (66 - dw) / 2;
-      const dy = (66 - dh) / 2;
+      const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+      const baseFit = Math.min((cw - 8) / frame.rect.w, (ch - 8) / frame.rect.h);
+      const effectiveScale = baseFit * s;
+      const dw = frame.rect.w * effectiveScale;
+      const dh = frame.rect.h * effectiveScale;
+      const dx = (cw - dw) / 2;
+      const dy = (ch - dh) / 2;
 
       if (frame.maskCanvas) {
         tctx.drawImage(
@@ -330,6 +338,26 @@ class SpriteAnimatorApp {
           frame.rect.x, frame.rect.y, frame.rect.w, frame.rect.h,
           dx, dy, dw, dh
         );
+      }
+    }
+
+    // 动态同步缩略图左下角的缩放百分比胶囊徽章
+    const thumbBox = itemEl.querySelector('.frame-thumb-box');
+    if (thumbBox) {
+      let scalePill = thumbBox.querySelector('.frame-scale-pill');
+      const sVal = (typeof frame.scale === 'number') ? frame.scale : 1.0;
+      const sPercent = Math.round(sVal * 100);
+      if (sPercent !== 100) {
+        if (!scalePill) {
+          scalePill = document.createElement('div');
+          scalePill.className = 'frame-scale-pill';
+          scalePill.style.cssText = 'position: absolute; bottom: 4px; left: 4px; font-size: 9px; font-weight: 700; background: rgba(58, 134, 255, 0.9); color: #fff; padding: 1px 4px; border-radius: 3px; font-family: var(--font-mono); pointer-events: none; z-index: 2;';
+          thumbBox.appendChild(scalePill);
+        }
+        scalePill.textContent = `${sPercent}%`;
+        scalePill.style.display = 'block';
+      } else if (scalePill) {
+        scalePill.style.display = 'none';
       }
     }
   }
@@ -957,65 +985,128 @@ class SpriteAnimatorApp {
     }
 
     // 2.3 单帧人物缩放比例 (Scale) 事件绑定
-    const handleScaleChange = (newPercent) => {
-      const selectedFrame = state.getSelectedFrame();
-      if (!selectedFrame) return;
+    const handleScaleChange = (newPercent, commit = true) => {
+      let selectedFrame = state.getSelectedFrame();
+      if (!selectedFrame) {
+        const frames = state.get('frames') || [];
+        if (frames.length > 0) {
+          const currentIdx = (this.player && this.player.currentFrameIndex >= 0 && this.player.currentFrameIndex < frames.length)
+            ? this.player.currentFrameIndex
+            : 0;
+          selectedFrame = frames[currentIdx];
+          state.selectFrame(selectedFrame.id);
+        } else {
+          this.setStatus('当前无动作帧，请先导入图片并添加切片选框');
+          this.showToast('请先导入图片并添加切片选框后再调节人物缩放', 'warning');
+          return;
+        }
+      }
 
       const scale = frameAlignment.setScale(selectedFrame, newPercent / 100);
       const percent = Math.round(scale * 100);
 
-      if (this.frameScaleSlider) this.frameScaleSlider.value = percent;
-      if (this.frameScaleInput) this.frameScaleInput.value = percent;
-      if (this.frameScaleDisplay) this.frameScaleDisplay.textContent = `${percent}%`;
+      if (this.frameScaleSlider && document.activeElement !== this.frameScaleSlider) {
+        this.frameScaleSlider.value = percent;
+      }
+      if (this.frameScaleInput && document.activeElement !== this.frameScaleInput) {
+        this.frameScaleInput.value = percent;
+      }
+      if (this.frameScaleDisplay) {
+        this.frameScaleDisplay.textContent = `${percent}%`;
+      }
 
-      state.updateFrame(selectedFrame.id, { scale });
+      // 直接同步内存中当前帧的 scale，确保视口毫秒级即时反映
+      selectedFrame.scale = scale;
+      if (commit) {
+        state.updateFrame(selectedFrame.id, { scale });
+      }
+
+      // 实时更新缩略图徽章、主画布、播放器视口以及步骤 3 的实时对比小舞台
+      this.updateSingleThumbnail(selectedFrame.id);
       this.renderMainCanvas();
       this.renderPlayerViewport();
-      this.setStatus(`当前帧缩放比例已调整为: ${percent}%`);
+      this.renderScalePreviewViewport();
+      if (this.player && this.player.isPlaying) {
+        this.player.render();
+      }
+      this.setStatus(`当前帧 [${selectedFrame.name || '选框'}] 人物缩放比例已调整为: ${percent}%`);
     };
 
     if (this.frameScaleSlider) {
       this.frameScaleSlider.addEventListener('input', (e) => {
-        handleScaleChange(parseFloat(e.target.value) || 100);
+        handleScaleChange(parseFloat(e.target.value) || 100, false);
+      });
+      this.frameScaleSlider.addEventListener('change', (e) => {
+        handleScaleChange(parseFloat(e.target.value) || 100, true);
       });
     }
 
     if (this.frameScaleInput) {
       this.frameScaleInput.addEventListener('change', (e) => {
-        handleScaleChange(parseFloat(e.target.value) || 100);
+        handleScaleChange(parseFloat(e.target.value) || 100, true);
       });
       this.frameScaleInput.addEventListener('input', (e) => {
         const val = parseFloat(e.target.value);
         if (!isNaN(val) && val >= 20 && val <= 300) {
-          handleScaleChange(val);
+          handleScaleChange(val, false);
         }
       });
     }
 
     if (this.btnScaleMinus) {
       this.btnScaleMinus.addEventListener('click', () => {
-        const selectedFrame = state.getSelectedFrame();
-        if (!selectedFrame) return;
+        let selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) {
+          const frames = state.get('frames') || [];
+          if (frames.length > 0) {
+            state.selectFrame(frames[0].id);
+            selectedFrame = frames[0];
+          }
+        }
+        if (!selectedFrame) {
+          this.showToast('请先选择动作帧', 'warning');
+          return;
+        }
         const curScale = (typeof selectedFrame.scale === 'number') ? selectedFrame.scale : 1.0;
-        handleScaleChange(Math.round((curScale - 0.05) * 100));
+        handleScaleChange(Math.round((curScale - 0.05) * 100), true);
       });
     }
 
     if (this.btnScalePlus) {
       this.btnScalePlus.addEventListener('click', () => {
-        const selectedFrame = state.getSelectedFrame();
-        if (!selectedFrame) return;
+        let selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) {
+          const frames = state.get('frames') || [];
+          if (frames.length > 0) {
+            state.selectFrame(frames[0].id);
+            selectedFrame = frames[0];
+          }
+        }
+        if (!selectedFrame) {
+          this.showToast('请先选择动作帧', 'warning');
+          return;
+        }
         const curScale = (typeof selectedFrame.scale === 'number') ? selectedFrame.scale : 1.0;
-        handleScaleChange(Math.round((curScale + 0.05) * 100));
+        handleScaleChange(Math.round((curScale + 0.05) * 100), true);
       });
     }
 
     if (this.btnResetScale) {
       this.btnResetScale.addEventListener('click', () => {
-        const selectedFrame = state.getSelectedFrame();
-        if (!selectedFrame) return;
+        let selectedFrame = state.getSelectedFrame();
+        if (!selectedFrame) {
+          const frames = state.get('frames') || [];
+          if (frames.length > 0) {
+            state.selectFrame(frames[0].id);
+            selectedFrame = frames[0];
+          }
+        }
+        if (!selectedFrame) {
+          this.showToast('请先选择动作帧', 'warning');
+          return;
+        }
         frameAlignment.resetScale(selectedFrame);
-        handleScaleChange(100);
+        handleScaleChange(100, true);
         this.setStatus('已恢复当前帧缩放为 100% 原始尺寸');
       });
     }
@@ -2675,9 +2766,10 @@ class SpriteAnimatorApp {
   }
 
   /**
-   * 渲染右侧动作帧列表缩略图序列
+   * 渲染右侧动作帧列表缩略图序列 (支持增量 Diff 局部更新与全量重绘)
+   * @param {boolean} [forceFull=false] 是否强制全量重构 DOM 结构
    */
-  renderFrameList() {
+  renderFrameList(forceFull = false) {
     if (!this.frameList) return;
 
     const frames = state.get('frames') || [];
@@ -2686,6 +2778,25 @@ class SpriteAnimatorApp {
 
     if (this.frameCountBadge) {
       this.frameCountBadge.textContent = frames.length;
+    }
+
+    // 检查现有 DOM 节点是否与 frames 匹配
+    const existingItems = Array.from(this.frameList.querySelectorAll('.frame-item'));
+    const isSameStructure = !forceFull && existingItems.length === frames.length &&
+      existingItems.every((el, i) => el.dataset.id === frames[i].id);
+
+    if (isSameStructure) {
+      // 结构相同，仅增量更新状态与缩略图，避免破坏焦点或造成滚动卡顿
+      frames.forEach((frame, idx) => {
+        const itemEl = existingItems[idx];
+        itemEl.classList.toggle('selected', frame.id === selectedId);
+        this.updateSingleThumbnail(frame.id);
+      });
+      this.updateSelectedFrameUI(selectedId);
+      if (this.player && this.player.isPlaying) {
+        this.highlightPlayingFrame(this.player.getCurrentFrameIndex());
+      }
+      return;
     }
 
     this.frameList.innerHTML = '';
@@ -2707,9 +2818,11 @@ class SpriteAnimatorApp {
 
       if (tctx && frame.rect.w > 0 && frame.rect.h > 0) {
         tctx.imageSmoothingEnabled = false;
-        const scale = Math.min(88 / frame.rect.w, 88 / frame.rect.h);
-        const dw = frame.rect.w * scale;
-        const dh = frame.rect.h * scale;
+        const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+        const baseScale = Math.min(88 / frame.rect.w, 88 / frame.rect.h);
+        const effectiveScale = baseScale * s;
+        const dw = frame.rect.w * effectiveScale;
+        const dh = frame.rect.h * effectiveScale;
         const dx = (96 - dw) / 2;
         const dy = (96 - dh) / 2;
 
@@ -2735,7 +2848,8 @@ class SpriteAnimatorApp {
       // 若当前帧进行了缩放，在缩略图左下角显示醒目的缩放比例徽章
       if (typeof frame.scale === 'number' && Math.round(frame.scale * 100) !== 100) {
         const scalePill = document.createElement('div');
-        scalePill.style.cssText = 'position: absolute; bottom: 4px; left: 4px; font-size: 9px; font-weight: 700; background: rgba(58, 134, 255, 0.85); color: #fff; padding: 1px 4px; border-radius: 3px; font-family: var(--font-mono); pointer-events: none;';
+        scalePill.className = 'frame-scale-pill';
+        scalePill.style.cssText = 'position: absolute; bottom: 4px; left: 4px; font-size: 9px; font-weight: 700; background: rgba(58, 134, 255, 0.9); color: #fff; padding: 1px 4px; border-radius: 3px; font-family: var(--font-mono); pointer-events: none; z-index: 2;';
         scalePill.textContent = `${Math.round(frame.scale * 100)}%`;
         thumbBox.appendChild(scalePill);
       }
@@ -2809,6 +2923,7 @@ class SpriteAnimatorApp {
     this.updatePivotGridUI(frame);
     this.updateOffsetUI(frame);
     this.renderPlayerViewport();
+    this.renderScalePreviewViewport();
   }
 
   /**
@@ -2853,8 +2968,9 @@ class SpriteAnimatorApp {
       this.frameScaleDisplay.textContent = `${percent}%`;
     }
 
-    // 智能更新当前帧身量建议徽章
+    // 智能更新当前帧身量建议徽章与实时微缩对比视口
     this.updateScaleSuggestionUI(frame);
+    this.renderScalePreviewViewport();
   }
 
   /**
@@ -2936,6 +3052,110 @@ class SpriteAnimatorApp {
         zoom: effectiveZoom
       }
     );
+  }
+
+  /**
+   * 渲染步骤 3 实时身量比对微缩视口 (Scale Preview Viewport)
+   * 包含当前帧实时缩放渲染、底层第 1 帧青蓝色半透明幽灵剪影、以及脚底对齐基准线
+   */
+  renderScalePreviewViewport() {
+    if (!this.scaleCompareCanvas) return;
+    const ctx = this.scaleCompareCanvas.getContext('2d');
+    if (!ctx) return;
+
+    const w = this.scaleCompareCanvas.width || 140;
+    const h = this.scaleCompareCanvas.height || 140;
+    ctx.clearRect(0, 0, w, h);
+
+    const frames = state.get('frames') || [];
+    const selectedId = state.get('selectedFrameId');
+    const sourceImage = state.get('sourceImage');
+    const refFrame = frames.length > 0 ? frames[0] : null;
+
+    let selectedFrame = frames.find(f => f.id === selectedId);
+    if (!selectedFrame && frames.length > 0) {
+      selectedFrame = frames[0];
+    }
+
+    // 更新指示标签
+    if (this.scalePreviewCurrentTag) {
+      if (selectedFrame) {
+        const sVal = (typeof selectedFrame.scale === 'number') ? selectedFrame.scale : 1.0;
+        this.scalePreviewCurrentTag.textContent = `${selectedFrame.name || '当前'}: ${Math.round(sVal * 100)}%`;
+      } else {
+        this.scalePreviewCurrentTag.textContent = '当前: 无';
+      }
+    }
+
+    if (this.scalePreviewGhostTag) {
+      if (refFrame && selectedFrame && refFrame.id !== selectedFrame.id) {
+        this.scalePreviewGhostTag.style.display = 'block';
+        this.scalePreviewGhostTag.textContent = `基准: ${refFrame.name || '帧 1'}`;
+      } else {
+        this.scalePreviewGhostTag.style.display = 'none';
+      }
+    }
+
+    if (!selectedFrame || (!selectedFrame.maskCanvas && !sourceImage) || !selectedFrame.rect) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('暂无切片帧', w / 2, h / 2);
+      return;
+    }
+
+    const groundY = Math.round(h * 0.85);
+    const centerX = Math.round(w / 2);
+
+    // 绘制地面参考线 (细蓝实线)
+    ctx.save();
+    ctx.strokeStyle = '#3a86ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(8, groundY);
+    ctx.lineTo(w - 8, groundY);
+    ctx.stroke();
+
+    // 绘制微型中心点
+    ctx.fillStyle = '#06d6a0';
+    ctx.beginPath();
+    ctx.arc(centerX, groundY, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 计算缩放比例让角色完整容纳在视口中
+    let maxContentH = selectedFrame.rect ? selectedFrame.rect.h : 64;
+    let maxContentW = selectedFrame.rect ? selectedFrame.rect.w : 64;
+    if (refFrame && refFrame.rect) {
+      if (refFrame.rect.h > maxContentH) maxContentH = refFrame.rect.h;
+      if (refFrame.rect.w > maxContentW) maxContentW = refFrame.rect.w;
+    }
+
+    const availH = h * 0.74;
+    const availW = w * 0.82;
+    const fitScale = Math.min(1.0, availH / Math.max(1, maxContentH), availW / Math.max(1, maxContentW));
+
+    // 1. 绘制底层幽灵基准帧 (第 1 帧青蓝色半透明剪影)
+    if (refFrame && refFrame.id !== selectedFrame.id && refFrame.rect) {
+      ctx.save();
+      ctx.translate(centerX, groundY);
+      ctx.scale(fitScale, fitScale);
+      frameAlignment.renderFrameToContext(ctx, refFrame, sourceImage, 0, 0, {
+        alpha: 0.35,
+        tint: '#00e5ff'
+      });
+      ctx.restore();
+    }
+
+    // 2. 绘制当前帧 (应用其自身 scale)
+    ctx.save();
+    ctx.translate(centerX, groundY);
+    ctx.scale(fitScale, fitScale);
+    frameAlignment.renderFrameToContext(ctx, selectedFrame, sourceImage, 0, 0, {
+      alpha: 1.0,
+      tint: null
+    });
+    ctx.restore();
   }
 
   /**
@@ -3065,6 +3285,7 @@ class SpriteAnimatorApp {
 
   initCanvas() {
     this.renderPlayerViewport();
+    this.renderScalePreviewViewport();
   }
 }
 

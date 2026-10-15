@@ -136,11 +136,14 @@ export class AnimationPlayer {
   /**
    * 更新序列帧列表
    * @param {Array<Object>} frames 
+   * @param {Object} [options={}] { notify: boolean }
    */
-  setFrames(frames) {
+  setFrames(frames, options = {}) {
     this.frames = Array.isArray(frames) ? [...frames] : [];
     this.currentFrameIndex = this._sanitizeIndex(this.currentFrameIndex);
-    this._notifyFrameChange();
+    if (options.notify === true) {
+      this._notifyFrameChange();
+    }
     this.render();
   }
 

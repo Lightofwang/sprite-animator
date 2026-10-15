@@ -1381,18 +1381,22 @@ export class CanvasWorkspace {
     ctx.lineWidth = 2;
     ctx.strokeRect(sp.x, sp.y, sw, sh);
 
-    // 3. 序号与尺寸标签
-    const badgeText = `#${idx + 1} (${w}×${h})`;
+    // 3. 序号、尺寸与人物缩放标签
+    const sVal = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+    const sPercent = Math.round(sVal * 100);
+    const badgeText = (sPercent !== 100)
+      ? `#${idx + 1} (${w}×${h}) · 缩放 ${sPercent}%`
+      : `#${idx + 1} (${w}×${h})`;
     ctx.font = '11px monospace';
     const textWidth = ctx.measureText(badgeText).width;
     const badgeH = 16;
     const badgeW = textWidth + 10;
     const badgeY = Math.max(0, sp.y - badgeH);
 
-    ctx.fillStyle = '#ffd166';
+    ctx.fillStyle = (sPercent !== 100) ? '#3a86ff' : '#ffd166';
     ctx.fillRect(sp.x, badgeY, badgeW, badgeH);
 
-    ctx.fillStyle = '#181820';
+    ctx.fillStyle = (sPercent !== 100) ? '#ffffff' : '#181820';
     ctx.font = 'bold 11px monospace';
     ctx.fillText(badgeText, sp.x + 5, badgeY + 12);
 

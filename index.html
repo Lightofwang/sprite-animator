@@ -321,6 +321,20 @@
                 </div>
               </div>
 
+              <!-- 实时身量对比小视口 (眼皮底下即时反馈当前帧 vs 第1帧幽灵对比) -->
+              <div class="scale-preview-container" style="display: flex; gap: 14px; align-items: center; background: rgba(0, 0, 0, 0.28); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <div class="scale-preview-stage checkerboard-bg" style="position: relative; width: 140px; height: 140px; border-radius: 4px; overflow: hidden; flex-shrink: 0; border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; background-color: #1a1a24;">
+                  <canvas id="scale-compare-canvas" width="140" height="140" style="width: 140px; height: 140px; image-rendering: pixelated;"></canvas>
+                  <div id="scale-preview-ghost-tag" style="position: absolute; top: 4px; left: 4px; font-size: 9px; font-weight: 700; background: rgba(0, 229, 255, 0.85); color: #000; padding: 1px 5px; border-radius: 2px; pointer-events: none; z-index: 2;">基准: 帧 1</div>
+                  <div id="scale-preview-current-tag" style="position: absolute; bottom: 4px; right: 4px; font-size: 9px; font-weight: 700; background: rgba(58, 134, 255, 0.85); color: #fff; padding: 1px 5px; border-radius: 2px; pointer-events: none; z-index: 2;">当前: 100%</div>
+                </div>
+                <div style="flex: 1; font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 6px;">
+                  <div style="color: var(--text-main); font-weight: 600;">👀 实时身量比对微缩舞台</div>
+                  <div>当前帧随滑块<span style="color: #3a86ff; font-weight: 600;">即时无极缩放</span>。底层青蓝剪影为<span style="color: #00e5ff; font-weight: 600;">第 1 帧基准</span>，脚底基准线自动平齐，身量是否协调一目了然！</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">拖动下方滑块或点击 -5% / +5% 微调。</div>
+                </div>
+              </div>
+
               <!-- 滑块与输入框行 -->
               <div class="control-row-lg">
                 <input type="range" id="frame-scale-slider" min="50" max="150" step="1" value="100" class="pro-slider" title="拖动无极调节角色大小 (50% ~ 150%)">
