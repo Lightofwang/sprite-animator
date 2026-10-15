@@ -9,33 +9,33 @@
 /* 内联样式表: css/style.css */
 /**
  * @file style.css
- * @description Sprite Animator 现代化高质感浅色专业工作台主题 (Light Clean Pro UI)
+ * @description Sprite Animator 现代化高质感深色专业工作台主题 (Dark Clean Pro UI)
  */
 
 :root {
-  --bg-app: #f1f5f9;
-  --bg-toolbar: #ffffff;
-  --bg-panel: #ffffff;
-  --bg-subpanel: #f8fafc;
-  --bg-input: #ffffff;
-  --bg-hover: #f1f5f9;
-  --bg-active: #e2e8f0;
+  --bg-app: #121316;
+  --bg-toolbar: #181920;
+  --bg-panel: #1e1f29;
+  --bg-subpanel: #262736;
+  --bg-input: #14151b;
+  --bg-hover: #2a2b3d;
+  --bg-active: #34364c;
 
-  --border-color: #e2e8f0;
-  --border-light: #cbd5e1;
-  --border-focus: #2563eb;
+  --border-color: #2c2d3d;
+  --border-light: #3e4056;
+  --border-focus: #3a86ff;
 
-  --text-main: #0f172a;
-  --text-sub: #475569;
-  --text-muted: #94a3b8;
+  --text-main: #f1f5f9;
+  --text-sub: #94a3b8;
+  --text-muted: #64748b;
 
-  --accent-blue: #2563eb;
-  --accent-blue-hover: #1d4ed8;
-  --accent-blue-subtle: rgba(37, 99, 235, 0.08);
-  --accent-pink: #ec4899;
-  --accent-green: #059669;
-  --accent-yellow: #d97706;
-  --accent-red: #ef4444;
+  --accent-blue: #3a86ff;
+  --accent-blue-hover: #2670e8;
+  --accent-blue-subtle: rgba(58, 134, 255, 0.15);
+  --accent-pink: #ff006e;
+  --accent-green: #06d6a0;
+  --accent-yellow: #ffd166;
+  --accent-red: #ef476f;
 
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -45,8 +45,8 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   --checker-size: 16px;
-  --checker-c1: #ffffff;
-  --checker-c2: #e9ecf2;
+  --checker-c1: #16171f;
+  --checker-c2: #1e1f2a;
 }
 
 * {
@@ -70,7 +70,7 @@ body {
   scroll-behavior: smooth;
 }
 
-/* 棋盘格透明背景 (清爽明亮浅灰白格) */
+/* 棋盘格透明背景 (沉浸式暗黑微格) */
 .checkerboard-bg {
   background-color: var(--checker-c1);
   background-image: 
@@ -82,7 +82,7 @@ body {
   background-position: 0 0, 0 calc(var(--checker-size) / 2), calc(var(--checker-size) / 2) calc(-1 * var(--checker-size) / 2), calc(-1 * var(--checker-size) / 2) 0px;
 }
 
-/* 自定义全局流动滚动条 (细腻浅灰色) */
+/* 自定义全局流动滚动条 (暗调微光) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -91,11 +91,11 @@ body {
   background: var(--bg-app);
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--border-light);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--text-sub);
 }
 
 /* 布局结构 (全网页长页面流动体系) */
@@ -106,7 +106,7 @@ body {
   width: 100%;
 }
 
-/* 1. 顶部工具栏 (Sticky 随滚动吸顶，纯白白底微阴影) */
+/* 1. 顶部工具栏 (Sticky 随滚动吸顶，暗黑高级质感) */
 .top-toolbar {
   height: 50px;
   background-color: var(--bg-toolbar);
@@ -119,7 +119,7 @@ body {
   top: 0;
   z-index: 100;
   gap: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .toolbar-section {
@@ -191,7 +191,7 @@ body {
 
 .btn:hover {
   background-color: var(--bg-hover);
-  color: var(--text-main);
+  color: #fff;
 }
 
 .btn:active {
@@ -210,14 +210,14 @@ body {
 }
 
 .btn-secondary {
-  background-color: #ffffff;
+  background-color: var(--bg-subpanel);
   border-color: var(--border-color);
   color: var(--text-main);
 }
 .btn-secondary:hover {
   background-color: var(--bg-hover);
   border-color: var(--border-light);
-  color: var(--accent-blue);
+  color: #fff;
 }
 
 .btn-danger {
@@ -337,23 +337,23 @@ body {
   box-sizing: border-box;
 }
 
-/* 核心长流板块卡片体系 (Light Pro Flow Section System) */
+/* 核心长流板块卡片体系 (Dark Pro Flow Section System) */
 .flow-section {
   background-color: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 16px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .flow-section:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
+  border-color: var(--border-light);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
 .flow-section-header {
   height: 48px;
-  background-color: #f8fafc;
+  background-color: var(--bg-subpanel);
   border-bottom: 1px solid transparent;
   display: flex;
   align-items: center;
@@ -364,7 +364,7 @@ body {
   transition: background-color 0.15s ease;
 }
 .flow-section-header:hover {
-  background-color: #f1f5f9;
+  background-color: var(--bg-hover);
 }
 .flow-section:not(.collapsed) .flow-section-header {
   border-bottom-color: var(--border-color);
@@ -400,7 +400,7 @@ body {
   transition: transform 0.2s ease, color 0.15s ease;
 }
 .flow-section-header:hover .flow-section-arrow {
-  color: var(--accent-blue);
+  color: #fff;
 }
 .flow-section.collapsed .flow-section-arrow {
   transform: rotate(-90deg);
@@ -434,7 +434,7 @@ body {
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border-color);
-  background-color: #ffffff;
+  background-color: var(--bg-panel);
 }
 @media (max-width: 1080px) {
   .preview-player-column {
@@ -451,12 +451,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #fafbfc;
+  background-color: #12131a;
 }
 
 .preview-player-controls {
   padding: 14px 20px;
-  background-color: #ffffff;
+  background-color: var(--bg-panel);
   border-top: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -468,14 +468,14 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #f8fafc;
+  background-color: var(--bg-subpanel);
   min-height: 480px;
 }
 
 .preview-frames-toolbar {
   height: 44px;
   padding: 0 18px;
-  background-color: #ffffff;
+  background-color: var(--bg-toolbar);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -504,7 +504,7 @@ body {
   justify-content: center;
 }
 .flow-slice-bar {
-  background-color: #f8fafc;
+  background-color: var(--bg-toolbar);
   border-bottom: 1px solid var(--border-color);
   padding: 10px 20px;
   display: flex;
@@ -527,14 +527,14 @@ body {
   }
 }
 .flow-card-sub {
-  background-color: #ffffff;
+  background-color: var(--bg-subpanel);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 .flow-card-sub-title {
   font-size: 13px;
@@ -1182,7 +1182,7 @@ body {
   grid-template-columns: repeat(3, 28px);
   grid-template-rows: repeat(3, 28px);
   gap: 4px;
-  background: #f1f5f9;
+  background: var(--bg-input);
   padding: 5px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -1191,11 +1191,11 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--bg-subpanel);
   border: 1px solid var(--border-color);
 }
 .pivot-grid-lg .pivot-dot:hover {
-  background: #e2e8f0;
+  background: var(--bg-hover);
 }
 .pivot-grid-lg .pivot-dot.active {
   background: var(--accent-pink);
@@ -1749,12 +1749,86 @@ body {
     <!-- 工作台主体区域 -->
     <!-- 全网页自适应纵向长流主工作区 (高度不固定，全局顺畅滚动) -->
     <main class="main-workspace">
-      <!-- 板块 1：🎬 动画播放与动作帧序列 (预览与帧列表一体化联动，可整体折叠) -->
+      <!-- 步骤 1：✂️ 原图切片与工作区画布 (原图导入与切图工作台，默认展开) -->
+      <section class="flow-section" id="section-slice" data-card-id="section-slice">
+        <div class="flow-section-header">
+          <div class="flow-section-title">
+            <span class="section-icon">✂️</span>
+            <span>步骤 1：原图切片与工作区画布</span>
+          </div>
+          <div class="flow-section-actions">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span id="image-name-badge" class="info-badge">未载入图像</span>
+              <span id="image-dim-badge" class="info-badge">0 × 0 px</span>
+              <span id="cursor-pos-badge" class="info-badge">X: 0, Y: 0</span>
+              <span id="current-frame-info-badge" class="info-badge">选框: 无</span>
+            </div>
+            <span class="flow-section-arrow" title="收起/展开原图切片画布">▾</span>
+          </div>
+        </div>
+        <div class="flow-section-body">
+          <!-- 均等切片与选框尺寸快速工具栏 -->
+          <div class="flow-slice-bar">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span class="label-title-lg">当前选框尺寸:</span>
+              <div class="offset-inputs-lg" style="width: auto;">
+                <div class="coord-field-lg">
+                  <span class="coord-tag">宽:</span>
+                  <input type="number" id="frame-w" min="4" placeholder="宽" style="width: 50px;" title="当前帧选框宽度 (Enter应用)">
+                  <span class="coord-unit">px</span>
+                </div>
+                <div class="coord-field-lg">
+                  <span class="coord-tag">高:</span>
+                  <input type="number" id="frame-h" min="4" placeholder="高" style="width: 50px;" title="当前帧选框高度 (Enter应用)">
+                  <span class="coord-unit">px</span>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button class="btn btn-secondary btn-control-md" id="btn-unify-size" title="将全部选框尺寸统一为相同大小（以脚底中心对齐）">
+                📐 统一全部尺寸
+              </button>
+              <button class="btn btn-secondary btn-control-md" id="btn-grid-slice" title="按行与列生成均等网格选框">
+                ⊞ 网格等分切片
+              </button>
+            </div>
+          </div>
+
+          <!-- 主画布视口 (全宽舒适操作) -->
+          <div class="canvas-viewport-wrapper checkerboard-bg" id="viewport-container" style="width: 100%; height: 600px;">
+            <canvas id="main-canvas" width="1200" height="600"></canvas>
+            
+            <!-- 空状态提示与拖拽放置区 -->
+            <div class="empty-placeholder" id="empty-placeholder">
+              <div class="placeholder-icon">📂</div>
+              <div class="placeholder-title">点击或拖拽序列帧大图 / GIF 动图至此处</div>
+              <div class="placeholder-hint">支持 PNG / JPG / WebP，支持 GIF 动图自动无损拆分序列帧</div>
+              <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <button class="btn btn-primary" id="btn-empty-import">选择精灵大图</button>
+                <button class="btn btn-secondary" id="btn-empty-import-gif">🎞️ 拆分 GIF 动图</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 底部快捷键与状态提示栏 -->
+          <footer class="canvas-status-bar">
+            <div class="shortcut-tip">
+              <span><kbd>Space</kbd>: 播放/暂停</span>
+              <span><kbd>,</kbd> / <kbd>.</kbd> 或 <kbd>Alt</kbd>+<kbd>←</kbd><kbd>→</kbd>: 步进</span>
+              <span><kbd>Space</kbd>+拖拽: 平移</span>
+              <span><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>: 1px微调(Shift 10px)</span>
+            </div>
+            <div id="status-message">就绪</div>
+          </footer>
+        </div>
+      </section>
+
+      <!-- 步骤 2：🎬 动画播放与动作帧序列 (预览与动作帧一体化联动，默认展开) -->
       <section class="flow-section panel-player" id="panel-player" data-card-id="section-player-frames">
         <div class="flow-section-header">
           <div class="flow-section-title">
             <span class="section-icon">🎬</span>
-            <span>动画播放与动作帧序列 (<span id="frame-count-badge">0</span> 帧)</span>
+            <span>步骤 2：动画播放与动作帧序列 (<span id="frame-count-badge">0</span> 帧)</span>
           </div>
           <div class="flow-section-actions">
             <select class="select-input" id="player-zoom-select" title="播放器画面显示比例" style="max-width: 110px;">
@@ -1834,86 +1908,12 @@ body {
         </div>
       </section>
 
-      <!-- 板块 2：✂️ 原图切片与工作区画布 (默认展开) -->
-      <section class="flow-section" id="section-slice" data-card-id="section-slice">
-        <div class="flow-section-header">
-          <div class="flow-section-title">
-            <span class="section-icon">✂️</span>
-            <span>原图切片与工作区画布</span>
-          </div>
-          <div class="flow-section-actions">
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <span id="image-name-badge" class="info-badge">未载入图像</span>
-              <span id="image-dim-badge" class="info-badge">0 × 0 px</span>
-              <span id="cursor-pos-badge" class="info-badge">X: 0, Y: 0</span>
-              <span id="current-frame-info-badge" class="info-badge">选框: 无</span>
-            </div>
-            <span class="flow-section-arrow" title="收起/展开原图切片画布">▾</span>
-          </div>
-        </div>
-        <div class="flow-section-body">
-          <!-- 均等切片与选框尺寸快速工具栏 -->
-          <div class="flow-slice-bar">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <span class="label-title-lg">当前选框尺寸:</span>
-              <div class="offset-inputs-lg" style="width: auto;">
-                <div class="coord-field-lg">
-                  <span class="coord-tag">宽:</span>
-                  <input type="number" id="frame-w" min="4" placeholder="宽" style="width: 50px;" title="当前帧选框宽度 (Enter应用)">
-                  <span class="coord-unit">px</span>
-                </div>
-                <div class="coord-field-lg">
-                  <span class="coord-tag">高:</span>
-                  <input type="number" id="frame-h" min="4" placeholder="高" style="width: 50px;" title="当前帧选框高度 (Enter应用)">
-                  <span class="coord-unit">px</span>
-                </div>
-              </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <button class="btn btn-secondary btn-control-md" id="btn-unify-size" title="将全部选框尺寸统一为相同大小（以脚底中心对齐）">
-                📐 统一全部尺寸
-              </button>
-              <button class="btn btn-secondary btn-control-md" id="btn-grid-slice" title="按行与列生成均等网格选框">
-                ⊞ 网格等分切片
-              </button>
-            </div>
-          </div>
-
-          <!-- 主画布视口 (全宽舒适操作) -->
-          <div class="canvas-viewport-wrapper checkerboard-bg" id="viewport-container" style="width: 100%; height: 600px;">
-            <canvas id="main-canvas" width="1200" height="600"></canvas>
-            
-            <!-- 空状态提示与拖拽放置区 -->
-            <div class="empty-placeholder" id="empty-placeholder">
-              <div class="placeholder-icon">📂</div>
-              <div class="placeholder-title">点击或拖拽序列帧大图 / GIF 动图至此处</div>
-              <div class="placeholder-hint">支持 PNG / JPG / WebP，支持 GIF 动图自动无损拆分序列帧</div>
-              <div style="display: flex; gap: 8px; margin-top: 8px;">
-                <button class="btn btn-primary" id="btn-empty-import">选择精灵大图</button>
-                <button class="btn btn-secondary" id="btn-empty-import-gif">🎞️ 拆分 GIF 动图</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 底部快捷键与状态提示栏 -->
-          <footer class="canvas-status-bar">
-            <div class="shortcut-tip">
-              <span><kbd>Space</kbd>: 播放/暂停</span>
-              <span><kbd>,</kbd> / <kbd>.</kbd> 或 <kbd>Alt</kbd>+<kbd>←</kbd><kbd>→</kbd>: 步进</span>
-              <span><kbd>Space</kbd>+拖拽: 平移</span>
-              <span><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>: 1px微调(Shift 10px)</span>
-            </div>
-            <div id="status-message">就绪</div>
-          </footer>
-        </div>
-      </section>
-
-      <!-- 板块 3：🎯 人物缩放与身量对齐校准 (默认展开) -->
+      <!-- 步骤 3：🎯 人物缩放与身量对齐校准 (默认展开) -->
       <section class="flow-section" id="section-alignment" data-card-id="section-alignment">
         <div class="flow-section-header">
           <div class="flow-section-title">
             <span class="section-icon">🎯</span>
-            <span>人物缩放与身量对齐校准</span>
+            <span>步骤 3：人物缩放与身量对齐校准</span>
           </div>
           <div class="flow-section-actions">
             <span class="flow-section-arrow" title="收起/展开人物缩放与对齐校准">▾</span>

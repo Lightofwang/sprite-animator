@@ -1,32 +1,32 @@
 /**
  * @file style.css
- * @description Sprite Animator 现代化高质感浅色专业工作台主题 (Light Clean Pro UI)
+ * @description Sprite Animator 现代化高质感深色专业工作台主题 (Dark Clean Pro UI)
  */
 
 :root {
-  --bg-app: #f1f5f9;
-  --bg-toolbar: #ffffff;
-  --bg-panel: #ffffff;
-  --bg-subpanel: #f8fafc;
-  --bg-input: #ffffff;
-  --bg-hover: #f1f5f9;
-  --bg-active: #e2e8f0;
+  --bg-app: #121316;
+  --bg-toolbar: #181920;
+  --bg-panel: #1e1f29;
+  --bg-subpanel: #262736;
+  --bg-input: #14151b;
+  --bg-hover: #2a2b3d;
+  --bg-active: #34364c;
 
-  --border-color: #e2e8f0;
-  --border-light: #cbd5e1;
-  --border-focus: #2563eb;
+  --border-color: #2c2d3d;
+  --border-light: #3e4056;
+  --border-focus: #3a86ff;
 
-  --text-main: #0f172a;
-  --text-sub: #475569;
-  --text-muted: #94a3b8;
+  --text-main: #f1f5f9;
+  --text-sub: #94a3b8;
+  --text-muted: #64748b;
 
-  --accent-blue: #2563eb;
-  --accent-blue-hover: #1d4ed8;
-  --accent-blue-subtle: rgba(37, 99, 235, 0.08);
-  --accent-pink: #ec4899;
-  --accent-green: #059669;
-  --accent-yellow: #d97706;
-  --accent-red: #ef4444;
+  --accent-blue: #3a86ff;
+  --accent-blue-hover: #2670e8;
+  --accent-blue-subtle: rgba(58, 134, 255, 0.15);
+  --accent-pink: #ff006e;
+  --accent-green: #06d6a0;
+  --accent-yellow: #ffd166;
+  --accent-red: #ef476f;
 
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -36,8 +36,8 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   --checker-size: 16px;
-  --checker-c1: #ffffff;
-  --checker-c2: #e9ecf2;
+  --checker-c1: #16171f;
+  --checker-c2: #1e1f2a;
 }
 
 * {
@@ -61,7 +61,7 @@ body {
   scroll-behavior: smooth;
 }
 
-/* 棋盘格透明背景 (清爽明亮浅灰白格) */
+/* 棋盘格透明背景 (沉浸式暗黑微格) */
 .checkerboard-bg {
   background-color: var(--checker-c1);
   background-image: 
@@ -73,7 +73,7 @@ body {
   background-position: 0 0, 0 calc(var(--checker-size) / 2), calc(var(--checker-size) / 2) calc(-1 * var(--checker-size) / 2), calc(-1 * var(--checker-size) / 2) 0px;
 }
 
-/* 自定义全局流动滚动条 (细腻浅灰色) */
+/* 自定义全局流动滚动条 (暗调微光) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -82,11 +82,11 @@ body {
   background: var(--bg-app);
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--border-light);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--text-sub);
 }
 
 /* 布局结构 (全网页长页面流动体系) */
@@ -97,7 +97,7 @@ body {
   width: 100%;
 }
 
-/* 1. 顶部工具栏 (Sticky 随滚动吸顶，纯白白底微阴影) */
+/* 1. 顶部工具栏 (Sticky 随滚动吸顶，暗黑高级质感) */
 .top-toolbar {
   height: 50px;
   background-color: var(--bg-toolbar);
@@ -110,7 +110,7 @@ body {
   top: 0;
   z-index: 100;
   gap: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .toolbar-section {
@@ -182,7 +182,7 @@ body {
 
 .btn:hover {
   background-color: var(--bg-hover);
-  color: var(--text-main);
+  color: #fff;
 }
 
 .btn:active {
@@ -201,14 +201,14 @@ body {
 }
 
 .btn-secondary {
-  background-color: #ffffff;
+  background-color: var(--bg-subpanel);
   border-color: var(--border-color);
   color: var(--text-main);
 }
 .btn-secondary:hover {
   background-color: var(--bg-hover);
   border-color: var(--border-light);
-  color: var(--accent-blue);
+  color: #fff;
 }
 
 .btn-danger {
@@ -328,23 +328,23 @@ body {
   box-sizing: border-box;
 }
 
-/* 核心长流板块卡片体系 (Light Pro Flow Section System) */
+/* 核心长流板块卡片体系 (Dark Pro Flow Section System) */
 .flow-section {
   background-color: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 16px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .flow-section:hover {
-  border-color: #cbd5e1;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
+  border-color: var(--border-light);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 
 .flow-section-header {
   height: 48px;
-  background-color: #f8fafc;
+  background-color: var(--bg-subpanel);
   border-bottom: 1px solid transparent;
   display: flex;
   align-items: center;
@@ -355,7 +355,7 @@ body {
   transition: background-color 0.15s ease;
 }
 .flow-section-header:hover {
-  background-color: #f1f5f9;
+  background-color: var(--bg-hover);
 }
 .flow-section:not(.collapsed) .flow-section-header {
   border-bottom-color: var(--border-color);
@@ -391,7 +391,7 @@ body {
   transition: transform 0.2s ease, color 0.15s ease;
 }
 .flow-section-header:hover .flow-section-arrow {
-  color: var(--accent-blue);
+  color: #fff;
 }
 .flow-section.collapsed .flow-section-arrow {
   transform: rotate(-90deg);
@@ -425,7 +425,7 @@ body {
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border-color);
-  background-color: #ffffff;
+  background-color: var(--bg-panel);
 }
 @media (max-width: 1080px) {
   .preview-player-column {
@@ -442,12 +442,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #fafbfc;
+  background-color: #12131a;
 }
 
 .preview-player-controls {
   padding: 14px 20px;
-  background-color: #ffffff;
+  background-color: var(--bg-panel);
   border-top: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
@@ -459,14 +459,14 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #f8fafc;
+  background-color: var(--bg-subpanel);
   min-height: 480px;
 }
 
 .preview-frames-toolbar {
   height: 44px;
   padding: 0 18px;
-  background-color: #ffffff;
+  background-color: var(--bg-toolbar);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -495,7 +495,7 @@ body {
   justify-content: center;
 }
 .flow-slice-bar {
-  background-color: #f8fafc;
+  background-color: var(--bg-toolbar);
   border-bottom: 1px solid var(--border-color);
   padding: 10px 20px;
   display: flex;
@@ -518,14 +518,14 @@ body {
   }
 }
 .flow-card-sub {
-  background-color: #ffffff;
+  background-color: var(--bg-subpanel);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 .flow-card-sub-title {
   font-size: 13px;
@@ -1173,7 +1173,7 @@ body {
   grid-template-columns: repeat(3, 28px);
   grid-template-rows: repeat(3, 28px);
   gap: 4px;
-  background: #f1f5f9;
+  background: var(--bg-input);
   padding: 5px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -1182,11 +1182,11 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 4px;
-  background: #ffffff;
+  background: var(--bg-subpanel);
   border: 1px solid var(--border-color);
 }
 .pivot-grid-lg .pivot-dot:hover {
-  background: #e2e8f0;
+  background: var(--bg-hover);
 }
 .pivot-grid-lg .pivot-dot.active {
   background: var(--accent-pink);
