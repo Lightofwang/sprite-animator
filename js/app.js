@@ -818,13 +818,13 @@ class SpriteAnimatorApp {
   }
 
   /**
-   * 绑定可折叠手风琴大卡片交互与偏好记忆
+   * 绑定全网页四大长流板块与手风琴卡片的折叠交互与偏好记忆
    */
   bindAccordionCards() {
-    const cards = document.querySelectorAll('.sidebar-panel .accordion-card');
+    const cards = document.querySelectorAll('.flow-section, .accordion-card');
     if (!cards || cards.length === 0) return;
 
-    const STORAGE_KEY = 'sprite_animator_accordion_state';
+    const STORAGE_KEY = 'sprite_animator_flow_sections_state';
 
     // 1. 尝试从 localStorage 恢复用户折叠习惯
     try {
@@ -836,7 +836,7 @@ class SpriteAnimatorApp {
           if (cardId && stateMap[cardId] !== undefined) {
             const isCollapsed = Boolean(stateMap[cardId]);
             card.classList.toggle('collapsed', isCollapsed);
-            const arrow = card.querySelector('.card-arrow');
+            const arrow = card.querySelector('.flow-section-arrow, .card-arrow');
             if (arrow) {
               arrow.textContent = isCollapsed ? '▸' : '▾';
             }
@@ -844,24 +844,24 @@ class SpriteAnimatorApp {
         });
       }
     } catch (err) {
-      console.warn('[SpriteAnimator] Failed to read accordion state from localStorage:', err);
+      console.warn('[SpriteAnimator] Failed to read flow state from localStorage:', err);
     }
 
-    // 2. 为每个卡片头部绑定点击折叠交互
+    // 2. 为每个板块/卡片头部绑定点击折叠交互
     cards.forEach((card) => {
-      const header = card.querySelector('.card-header');
+      const header = card.querySelector('.flow-section-header, .card-header');
       if (!header) return;
 
       header.addEventListener('click', (e) => {
         // 如果点击的是头部内部的操作按钮、下拉框、输入框等交互控件，不触发折叠
-        if (e.target.closest('button, select, input, .card-header-actions select, .card-header-actions button')) {
+        if (e.target.closest('button, select, input, .flow-section-actions select, .flow-section-actions button, .card-header-actions select, .card-header-actions button')) {
           return;
         }
 
         const willCollapse = !card.classList.contains('collapsed');
         card.classList.toggle('collapsed', willCollapse);
 
-        const arrow = card.querySelector('.card-arrow');
+        const arrow = card.querySelector('.flow-section-arrow, .card-arrow');
         if (arrow) {
           arrow.textContent = willCollapse ? '▸' : '▾';
         }
@@ -877,12 +877,30 @@ class SpriteAnimatorApp {
           });
           localStorage.setItem(STORAGE_KEY, JSON.stringify(stateMap));
         } catch (err) {
-          console.warn('[SpriteAnimator] Failed to save accordion state to localStorage:', err);
+          console.warn('[SpriteAnimator] Failed to save flow state to localStorage:', err);
         }
 
-        // 若涉及播放器展开/收起，触发一次视口重绘保证画面对齐
-        this.renderPlayerViewport();
+        // 触发视口尺寸同步与重绘
+        setTimeout(() => {
+          if (this.canvasWorkspace) {
+            this.canvasWorkspace.resize();
+            this.renderMainCanvas();
+          }
+          this.renderPlayerViewport();
+          if (this.player && this.player.isPlaying) {
+            this.player.render();
+          }
+        }, 50);
       });
+    });
+
+    // 3. 监听全局窗口尺寸变化，保证主画布视口和播放器始终像素对齐
+    window.addEventListener('resize', () => {
+      if (this.canvasWorkspace) {
+        this.canvasWorkspace.resize();
+        this.renderMainCanvas();
+      }
+      this.renderPlayerViewport();
     });
   }
 

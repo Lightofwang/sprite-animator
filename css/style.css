@@ -50,13 +50,15 @@ body {
   font-family: var(--font-sans);
   background-color: var(--bg-app);
   color: var(--text-main);
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
+  min-height: 100vh;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
   user-select: none;
   -webkit-user-select: none;
   font-size: 13px;
   line-height: 1.4;
+  scroll-behavior: smooth;
 }
 
 /* 棋盘格透明背景 */
@@ -71,31 +73,31 @@ body {
   background-position: 0 0, 0 calc(var(--checker-size) / 2), calc(var(--checker-size) / 2) calc(-1 * var(--checker-size) / 2), calc(-1 * var(--checker-size) / 2) 0px;
 }
 
-/* 自定义滚动条 */
+/* 自定义全局流动滚动条 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--bg-app);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border-light);
-  border-radius: 3px;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--text-sub);
 }
 
-/* 布局结构 */
+/* 布局结构 (全网页长页面流动体系) */
 .app-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  width: 100vw;
+  min-height: 100vh;
+  width: 100%;
 }
 
-/* 1. 顶部工具栏 */
+/* 1. 顶部工具栏 (Sticky 随滚动吸顶) */
 .top-toolbar {
   height: 48px;
   background-color: var(--bg-toolbar);
@@ -103,9 +105,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
-  z-index: 20;
+  padding: 0 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
   gap: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .toolbar-section {
@@ -308,12 +313,176 @@ body {
   color: #fff;
 }
 
-/* 2. 工作区主体 */
+/* 2. 全网页长页面自适应主容器 (高度不固定，全局顺畅滚动) */
 .main-workspace {
-  flex: 1;
   display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px 28px 80px;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 四大可折叠长流板块卡片体系 (Flow Section System) */
+.flow-section {
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.flow-section:hover {
+  border-color: var(--border-light);
+}
+
+.flow-section-header {
+  height: 48px;
+  background-color: var(--bg-subpanel);
+  border-bottom: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+}
+.flow-section-header:hover {
+  background-color: var(--bg-hover);
+}
+.flow-section:not(.collapsed) .flow-section-header {
+  border-bottom-color: var(--border-color);
+}
+
+.flow-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-main);
+  letter-spacing: 0.3px;
+}
+.flow-section-title .section-icon {
+  font-size: 18px;
+}
+
+.flow-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.flow-section-arrow {
+  font-size: 16px;
+  color: var(--text-sub);
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, color 0.15s ease;
+}
+.flow-section-header:hover .flow-section-arrow {
+  color: #fff;
+}
+.flow-section.collapsed .flow-section-arrow {
+  transform: rotate(-90deg);
+}
+
+.flow-section-body {
+  display: flex;
+  flex-direction: column;
+}
+.flow-section.collapsed .flow-section-body {
+  display: none;
+}
+
+/* 板块 1：播放器舞台与控制 */
+.flow-player-stage {
+  width: 100%;
+  height: 420px;
   position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #12131a;
+}
+.flow-player-controls {
+  background-color: var(--bg-toolbar);
+  border-top: 1px solid var(--border-color);
+  padding: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 板块 2：主画布切片工作台 */
+.flow-canvas-viewport {
+  width: 100%;
+  height: 560px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flow-slice-bar {
+  background-color: var(--bg-toolbar);
+  border-bottom: 1px solid var(--border-color);
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 板块 3：动作帧序列列表 */
+.flow-frames-list {
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+  gap: 12px;
+  align-content: start;
+  min-height: 160px;
+}
+
+/* 板块 4：人物缩放与对齐双列网格 */
+.alignment-scale-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px 18px;
+}
+@media (max-width: 900px) {
+  .alignment-scale-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.flow-card-sub {
+  background-color: var(--bg-subpanel);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.flow-card-sub-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+  margin-bottom: 2px;
 }
 
 /* 中央画布区域 */
@@ -353,7 +522,8 @@ body {
 }
 
 .canvas-viewport-wrapper {
-  flex: 1;
+  width: 100%;
+  height: 560px;
   position: relative;
   overflow: hidden;
   display: flex;
