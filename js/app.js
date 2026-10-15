@@ -124,11 +124,13 @@ class SpriteAnimatorApp {
     this.offsetXInput = document.getElementById('offset-x');
     this.offsetYInput = document.getElementById('offset-y');
     this.btnResetOffset = document.getElementById('btn-reset-offset');
+    this.btnAlignCenterAll = document.getElementById('btn-align-center-all');
     this.onionSkinToggle = document.getElementById('onion-skin-toggle');
     this.ghostOverlayToggle = document.getElementById('ghost-overlay-toggle');
     this.groundLineToggle = document.getElementById('ground-line-toggle');
+    this.calipersToggle = document.getElementById('calipers-toggle');
 
-    // 单帧人物缩放控制
+    // 单帧人物缩放控制与身量比对
     this.frameScaleSlider = document.getElementById('frame-scale-slider');
     this.frameScaleInput = document.getElementById('frame-scale-input');
     this.frameScaleDisplay = document.getElementById('frame-scale-display');
@@ -136,10 +138,12 @@ class SpriteAnimatorApp {
     this.btnScalePlus = document.getElementById('btn-scale-plus');
     this.btnResetScale = document.getElementById('btn-reset-scale');
     this.scaleCompareCanvas = document.getElementById('scale-compare-canvas');
+    this.scaleCompareModeSelect = document.getElementById('scale-compare-mode-select');
     this.scalePreviewGhostTag = document.getElementById('scale-preview-ghost-tag');
     this.scalePreviewCurrentTag = document.getElementById('scale-preview-current-tag');
     this.btnApplyScaleAll = document.getElementById('btn-apply-scale-all');
     this.syncAllScaleToggle = document.getElementById('sync-all-scale-toggle');
+    this.scaleCompareMode = 'ground'; // 'ground' 或 'center'
 
     // 播放器与视口控件
     this.btnPlayPause = document.getElementById('btn-play-pause');
@@ -156,6 +160,14 @@ class SpriteAnimatorApp {
     this.btnLastFrame = document.getElementById('btn-last-frame');
     this.panelPlayer = document.getElementById('panel-player') || document.querySelector('.panel-player');
     this.btnToggleFullscreenPlayer = document.getElementById('btn-toggle-fullscreen-player');
+
+    // A/B 极速闪烁比对控制
+    this.btnFlickerCompare = document.getElementById('btn-flicker-compare');
+    this.flickerTargetSelect = document.getElementById('flicker-target-select');
+    this.flickerHud = document.getElementById('flicker-hud');
+    this.isFlickering = false;
+    this.flickerTimer = null;
+    this.flickerPhase = false;
 
     // 背景透明化模态框元素
     this.modalRemoveBg = document.getElementById('modal-remove-bg');
@@ -838,8 +850,149 @@ class SpriteAnimatorApp {
       }
     });
 
-    // 7. 绑定手风琴卡片折叠交互与偏好记忆
+    // 7. 键盘抬起监听 (松开 Tab 键停止 A/B 闪烁比对)
+    window.addEventListener('keyup', (e) => {
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        this.stopFlickerCompare();
+      }
+    });
+
+    // 8. 绑定 A/B 极速闪烁比对按钮交互
+    this.bindFlickerCompare();
+
+    // 9. 绑定手风琴卡片折叠交互与偏好记忆
     this.bindAccordionCards();
+  }
+
+  /**
+   * 绑定动画师专用 A/B 极速闪烁比对按钮与事件 (消除果冻效应与大跳漂移神器)
+   */
+  bindFlickerCompare() {
+    if (!this.btnFlickerCompare) return;
+
+    // 鼠标按下：开始闪切
+    this.btnFlickerCompare.addEventListener('mousedown', (e) => {
+      if (e.button === 0) {
+        this.startFlickerCompare();
+      }
+    });
+
+    // 鼠标抬起/移出：停止闪切
+    const stopFlicker = () => this.stopFlickerCompare();
+    this.btnFlickerCompare.addEventListener('mouseup', stopFlicker);
+    this.btnFlickerCompare.addEventListener('mouseleave', stopFlicker);
+
+    // 触摸屏支持
+    this.btnFlickerCompare.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      this.startFlickerCompare();
+    });
+    this.btnFlickerCompare.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      stopFlicker();
+    });
+  }
+
+  /**
+   * 启动 A/B 极速闪烁比对 (Flicker Compare)
+   * 在当前选中帧与基准帧（第 1 帧或前一帧）之间以 8Hz (125ms) 高频交替渲染
+   */
+  startFlickerCompare() {
+    if (this.isFlickering) return;
+    const frames = state.get('frames') || [];
+    if (frames.length < 2) {
+      this.setStatus('至少需要 2 个动作帧才能进行 A/B 闪烁比对');
+      this.showToast('至少需要 2 个动作帧才能进行 A/B 闪切比对', 'warning');
+      return;
+    }
+    const selectedId = state.get('selectedFrameId');
+    const curIdx = frames.findIndex(f => f.id === selectedId);
+    if (curIdx === -1) return;
+
+    if (this.player && this.player.isPlaying) {
+      this.player.pause();
+    }
+
+    this.isFlickering = true;
+    this.flickerPhase = false; // false = 当前帧, true = 目标对比帧
+
+    if (this.flickerHud) {
+      this.flickerHud.style.display = 'block';
+    }
+
+    const targetMode = this.flickerTargetSelect ? this.flickerTargetSelect.value : 'ref';
+    let targetIdx = 0;
+    if (targetMode === 'prev') {
+      targetIdx = curIdx > 0 ? curIdx - 1 : frames.length - 1;
+    } else {
+      // 默认为第 0 帧，如果当前就是第 0 帧，则与第 1 帧对比
+      targetIdx = (curIdx === 0 && frames.length > 1) ? 1 : 0;
+    }
+
+    const curFrame = frames[curIdx];
+    const targetFrame = frames[targetIdx];
+
+    const sourceImage = state.get('sourceImage');
+    const playerState = state.get('playerState') || {};
+    const effectiveZoom = playerState.viewportScaleMode || playerState.zoom || 'auto';
+
+    const renderPhase = () => {
+      if (!this.isFlickering) return;
+      const frameToRender = this.flickerPhase ? targetFrame : curFrame;
+      const indexToRender = this.flickerPhase ? targetIdx : curIdx;
+
+      frameAlignment.renderAlignmentStage(
+        this.playerCanvas,
+        frameToRender,
+        frames,
+        indexToRender,
+        sourceImage,
+        {
+          ...playerState,
+          zoom: effectiveZoom,
+          showOnion: false, // 闪烁时临时关闭洋葱皮以保证画面对比最纯粹
+          ghostOverlay: false
+        }
+      );
+
+      if (this.flickerHud) {
+        if (this.flickerPhase) {
+          this.flickerHud.textContent = `⚡ 闪切基准: ${targetFrame.name || '帧 ' + (targetIdx + 1)}`;
+          this.flickerHud.style.background = 'rgba(0, 229, 255, 0.95)';
+          this.flickerHud.style.color = '#000';
+        } else {
+          this.flickerHud.textContent = `⚡ 闪切当前: ${curFrame.name || '帧 ' + (curIdx + 1)}`;
+          this.flickerHud.style.background = 'rgba(255, 0, 110, 0.95)';
+          this.flickerHud.style.color = '#fff';
+        }
+      }
+
+      this.flickerPhase = !this.flickerPhase;
+    };
+
+    // 立即交替一次
+    renderPhase();
+    this.flickerTimer = setInterval(renderPhase, 125); // 8fps 交替闪烁
+  }
+
+  /**
+   * 停止 A/B 极速闪烁比对，恢复当前帧的正常渲染
+   */
+  stopFlickerCompare() {
+    if (!this.isFlickering) return;
+    this.isFlickering = false;
+    if (this.flickerTimer) {
+      clearInterval(this.flickerTimer);
+      this.flickerTimer = null;
+    }
+    if (this.flickerHud) {
+      this.flickerHud.style.display = 'none';
+    }
+    this.renderPlayerViewport();
   }
 
   /**
@@ -1152,6 +1305,32 @@ class SpriteAnimatorApp {
       });
     }
 
+    // 2.5 一键将全部动作帧锚点设为几何正中心 (原地大跳 In-Place 模式)
+    if (this.btnAlignCenterAll) {
+      this.btnAlignCenterAll.addEventListener('click', () => {
+        const frames = state.get('frames') || [];
+        if (frames.length === 0) {
+          this.setStatus('当前暂无动作帧');
+          return;
+        }
+        frames.forEach(f => {
+          f.pivot = { x: 0.5, y: 0.5 };
+          f.offset = { x: 0, y: 0 };
+          state.updateFrame(f.id, { pivot: f.pivot, offset: f.offset });
+        });
+        const selectedFrame = state.getSelectedFrame();
+        if (selectedFrame) {
+          this.updateOffsetUI(selectedFrame);
+        }
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.renderFrameList();
+        const msg = `🥋 已将全部 ${frames.length} 个动作帧锚点设为几何正中心，成功转换为标准游戏【原地大跳 (In-Place)】模式！`;
+        this.setStatus(msg);
+        this.showToast(msg, 'success');
+      });
+    }
+
     // 3. 洋葱皮开关联动
     if (this.onionSkinToggle) {
       this.onionSkinToggle.addEventListener('change', (e) => {
@@ -1176,6 +1355,24 @@ class SpriteAnimatorApp {
         state.setPlayerState({ ghostOverlay: e.target.checked });
         this.renderPlayerViewport();
         this.setStatus(e.target.checked ? '已开启基准帧幽灵透光台对比 (第1帧青蓝半透明剪影垫底)' : '已关闭基准透光对比');
+      });
+    }
+
+    // 4.3 刚体双卡尺开关联动 (锁定大跳躯干高度，消除果冻)
+    if (this.calipersToggle) {
+      this.calipersToggle.addEventListener('change', (e) => {
+        state.setPlayerState({ calipers: e.target.checked });
+        this.renderPlayerViewport();
+        this.setStatus(e.target.checked ? '已开启刚体双卡尺 (金色头顶与骨盆双标尺线)' : '已关闭刚体卡尺');
+      });
+    }
+
+    // 4.4 实时身量比对微缩舞台对齐模式切换 (脚底 vs 躯干中心)
+    if (this.scaleCompareModeSelect) {
+      this.scaleCompareModeSelect.addEventListener('change', (e) => {
+        this.scaleCompareMode = e.target.value;
+        this.renderScalePreviewViewport();
+        this.setStatus(this.scaleCompareMode === 'center' ? '微缩舞台已切换为【🥋 躯干中心重合】(大跳腾空专属)' : '微缩舞台已切换为【🦶 脚底平齐】');
       });
     }
 
@@ -2821,23 +3018,43 @@ class SpriteAnimatorApp {
       return;
     }
 
-    const groundY = Math.round(h * 0.85);
+    const isCenterMode = (this.scaleCompareMode === 'center');
+    const groundY = isCenterMode ? Math.round(h / 2) : Math.round(h * 0.85);
     const centerX = Math.round(w / 2);
 
-    // 绘制地面参考线 (细蓝实线)
     ctx.save();
-    ctx.strokeStyle = '#3a86ff';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(8, groundY);
-    ctx.lineTo(w - 8, groundY);
-    ctx.stroke();
+    if (isCenterMode) {
+      // 绘制大跳躯干中心基准十字线 (金色虚线)
+      ctx.strokeStyle = 'rgba(255, 209, 102, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(8, groundY);
+      ctx.lineTo(w - 8, groundY);
+      ctx.moveTo(centerX, 8);
+      ctx.lineTo(centerX, h - 8);
+      ctx.stroke();
 
-    // 绘制微型中心点
-    ctx.fillStyle = '#06d6a0';
-    ctx.beginPath();
-    ctx.arc(centerX, groundY, 2, 0, Math.PI * 2);
-    ctx.fill();
+      // 躯干质心指示点
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath();
+      ctx.arc(centerX, groundY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // 绘制地面参考线 (细蓝实线)
+      ctx.strokeStyle = '#3a86ff';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(8, groundY);
+      ctx.lineTo(w - 8, groundY);
+      ctx.stroke();
+
+      // 绘制微型脚底中心点
+      ctx.fillStyle = '#06d6a0';
+      ctx.beginPath();
+      ctx.arc(centerX, groundY, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.restore();
 
     // 计算缩放比例让角色完整容纳在视口中
@@ -2859,7 +3076,8 @@ class SpriteAnimatorApp {
       ctx.scale(fitScale, fitScale);
       frameAlignment.renderFrameToContext(ctx, refFrame, sourceImage, 0, 0, {
         alpha: 0.35,
-        tint: '#00e5ff'
+        tint: '#00e5ff',
+        centerAnchor: isCenterMode
       });
       ctx.restore();
     }
@@ -2870,7 +3088,8 @@ class SpriteAnimatorApp {
     ctx.scale(fitScale, fitScale);
     frameAlignment.renderFrameToContext(ctx, selectedFrame, sourceImage, 0, 0, {
       alpha: 1.0,
-      tint: null
+      tint: null,
+      centerAnchor: isCenterMode
     });
     ctx.restore();
   }

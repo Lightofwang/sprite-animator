@@ -541,7 +541,14 @@ export class FrameAlignment {
   renderFrameToContext(ctx, frame, sourceImage, targetBaseX, targetBaseY, options = {}) {
     if (!ctx || !frame || !frame.rect) return;
 
-    const { dx, dy, renderW, renderH } = this.calculateWorldRenderPos(frame, targetBaseX, targetBaseY);
+    let { dx, dy, renderW, renderH } = this.calculateWorldRenderPos(frame, targetBaseX, targetBaseY);
+    if (options.centerAnchor) {
+      const s = (typeof frame.scale === 'number' && !isNaN(frame.scale) && frame.scale > 0) ? frame.scale : 1.0;
+      renderW = Math.round(frame.rect.w * s);
+      renderH = Math.round(frame.rect.h * s);
+      dx = Math.round(targetBaseX - renderW * 0.5);
+      dy = Math.round(targetBaseY - renderH * 0.5);
+    }
     const { w, h, x: sx, y: sy } = frame.rect;
     if (w <= 0 || h <= 0 || renderW <= 0 || renderH <= 0) return;
 
@@ -919,6 +926,62 @@ export class FrameAlignment {
         const sStr = `缩放:${sPercent}%`;
         ctx.fillText(sStr, hudX + 118, hudY + 12);
       }
+
+      ctx.restore();
+    }
+
+    // 5. 绘制金色刚体双卡尺 (Calipers) - 头顶与骨盆/腰部标尺线，锁定大跳刚体躯干
+    if (displayConfig.calipers) {
+      ctx.save();
+      const refFrame = allFrames.length > 0 ? allFrames[0] : currentFrame;
+      const refH = (refFrame?.rect?.h || 64) * scale;
+      
+      // 以 targetBaseY 向上推算头顶与骨盆/腰部高度
+      const headY = Math.round(targetBaseY - refH * 0.88);
+      const waistY = Math.round(targetBaseY - refH * 0.45);
+      const torsoH = Math.round(waistY - headY);
+
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([5, 3]);
+
+      // 头顶卡尺线
+      ctx.beginPath();
+      ctx.moveTo(10, headY);
+      ctx.lineTo(width - 10, headY);
+      ctx.stroke();
+
+      // 骨盆/腰部卡尺线
+      ctx.beginPath();
+      ctx.moveTo(10, waistY);
+      ctx.lineTo(width - 10, waistY);
+      ctx.stroke();
+
+      // 侧边标尺竖线与高度标注牌
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(35, headY);
+      ctx.lineTo(35, waistY);
+      ctx.stroke();
+
+      // 箭头微端
+      ctx.fillStyle = '#ffd166';
+      ctx.beginPath();
+      ctx.arc(35, headY, 2.5, 0, Math.PI * 2);
+      ctx.arc(35, waistY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 标尺文字
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#ffd166';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('📐 头顶卡尺', 42, headY - 2);
+      ctx.fillText('📐 骨盆卡尺', 42, waistY + 12);
+
+      ctx.font = 'bold 9px monospace';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`躯干:${torsoH}px`, 42, Math.round((headY + waistY) / 2));
 
       ctx.restore();
     }

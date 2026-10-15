@@ -244,9 +244,10 @@
           <div class="preview-frames-container">
             <!-- 左侧：高清动画播放舞台与控制器 -->
             <div class="preview-player-column">
-              <div class="preview-player-stage checkerboard-bg" id="player-wrapper">
+              <div class="preview-player-stage checkerboard-bg" id="player-wrapper" style="position: relative;">
                 <canvas id="player-canvas" width="480" height="380"></canvas>
                 <div class="player-frame-indicator" id="player-frame-indicator">0 / 0</div>
+                <div id="flicker-hud" style="display: none; position: absolute; top: 10px; right: 10px; background: rgba(255, 0, 110, 0.9); color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; z-index: 10; pointer-events: none; box-shadow: 0 2px 10px rgba(0,0,0,0.5); letter-spacing: 0.5px;">⚡ A/B 闪切比对中 (按住Tab)</div>
               </div>
               <div class="preview-player-controls">
                 <div class="playback-buttons">
@@ -266,7 +267,19 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
                   </button>
                 </div>
-                <div class="control-row-lg" style="margin-top: 2px;">
+
+                <!-- 动画师专用 A/B 极速闪烁比对控制行 (消除果冻效应与大跳漂移神器) -->
+                <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+                  <button class="btn btn-secondary btn-control-md" id="btn-flicker-compare" style="flex: 1; font-weight: 700; color: #ff006e; border-color: rgba(255, 0, 110, 0.45); background: rgba(255, 0, 110, 0.08);" title="按住鼠标不放或长按键盘 Tab 键，在当前帧与第1帧基准之间高频交替闪切，肉眼秒杀身体果冻忽大忽小与重心漂移！">
+                    ⚡ A/B 闪切比对 (按住Tab)
+                  </button>
+                  <select class="select-input" id="flicker-target-select" title="选择 A/B 闪烁对比的目标" style="max-width: 135px; font-size: 11px; height: 32px;">
+                    <option value="ref" selected>基准: 第 1 帧</option>
+                    <option value="prev">基准: 上一帧</option>
+                  </select>
+                </div>
+
+                <div class="control-row-lg" style="margin-top: 4px;">
                   <span class="label-title-lg">帧率 (FPS):</span>
                   <input type="range" id="fps-slider" min="1" max="60" value="12" class="pro-slider">
                   <span class="fps-display-lg" id="fps-display">12 FPS</span>
@@ -328,9 +341,15 @@
                   <div id="scale-preview-current-tag" style="position: absolute; bottom: 4px; right: 4px; font-size: 9px; font-weight: 700; background: rgba(58, 134, 255, 0.85); color: #fff; padding: 1px 5px; border-radius: 2px; pointer-events: none; z-index: 2;">当前: 100%</div>
                 </div>
                 <div style="flex: 1; font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 6px;">
-                  <div style="color: var(--text-main); font-weight: 600;">👀 实时身量比对微缩舞台</div>
-                  <div>当前帧随滑块<span style="color: #3a86ff; font-weight: 600;">即时无极缩放</span>。底层青蓝剪影为<span style="color: #00e5ff; font-weight: 600;">第 1 帧基准</span>，脚底基准线自动平齐，身量是否协调一目了然！</div>
-                  <div style="font-size: 11px; color: var(--text-dim);">拖动下方滑块或点击 -5% / +5% 微调。</div>
+                  <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                    <div style="color: var(--text-main); font-weight: 600;">👀 实时身量比对微缩舞台</div>
+                    <select class="select-input" id="scale-compare-mode-select" title="比对对齐基准：脚底平齐适合站立跑动；躯干中心适合大跳腾空！" style="padding: 2px 6px; font-size: 11px; height: 24px; max-width: 175px;">
+                      <option value="ground" selected>🦶 脚底平齐 (地面动作)</option>
+                      <option value="center">🥋 躯干中心 (大跳/腾空专属)</option>
+                    </select>
+                  </div>
+                  <div>当前帧随滑块<span style="color: #3a86ff; font-weight: 600;">即时无极缩放</span>。底层青蓝剪影为<span style="color: #00e5ff; font-weight: 600;">第 1 帧基准</span>。</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">💡 提示：大跳腾空时选择「🥋 躯干中心」，两帧胸腹直接叠合，身量胖瘦与果冻立刻原形毕露！</div>
                 </div>
               </div>
 
@@ -384,6 +403,9 @@
                     <div class="pivot-dot active" data-pivot="bottom-center" title="底部中心 (默认地面脚底)"></div>
                     <div class="pivot-dot" data-pivot="bottom-right" title="右下角"></div>
                   </div>
+                  <button class="btn btn-secondary" id="btn-align-center-all" style="width: 100%; margin-top: 6px; font-size: 11px; padding: 4px; font-weight: 600; color: #ffd166; border-color: rgba(255, 209, 102, 0.4);" title="一键将全部动作帧锚点设为几何正中心，瞬间将大跳动作转为标准游戏原地跳（In-Place）！">
+                    🥋 全帧设为重心(原地大跳)
+                  </button>
                 </div>
 
                 <div class="offset-inputs-container">
@@ -417,6 +439,10 @@
                 <label class="toggle-item-lg" title="显示 XY 轴参考标线、像素标尺刻度、当前帧十字准星与偏移距离标注">
                   <input type="checkbox" id="ground-line-toggle" checked>
                   <span class="toggle-text">XY 对齐标线</span>
+                </label>
+                <label class="toggle-item-lg" title="显示头顶与腰部双水平金色刚体卡尺，锁定主躯干刚体高度，彻底消除大跳果冻忽长忽短">
+                  <input type="checkbox" id="calipers-toggle">
+                  <span class="toggle-text" style="color: #ffd166; font-weight: 600;">📏 刚体双卡尺</span>
                 </label>
               </div>
             </div>
