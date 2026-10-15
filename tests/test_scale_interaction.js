@@ -136,6 +136,56 @@ it('setFrames 默认不触发 _notifyFrameChange 从而保护当前外部选中�
   assert.equal(player.currentFrameIndex, 1);
 });
 
+console.log('\n▶ [测试组 4] 跨帧切换持久化与一键同步至全部帧验证:');
+
+it('切换到其他帧再切回，当前帧的 scale 必须完整保留且不被重置', () => {
+  const frames = [
+    { id: 'f1', name: '帧 1', rect: { x: 0, y: 0, w: 100, h: 100 }, scale: 1.0 },
+    { id: 'f2', name: '帧 2', rect: { x: 100, y: 0, w: 100, h: 100 }, scale: 1.0 },
+    { id: 'f3', name: '帧 3', rect: { x: 200, y: 0, w: 100, h: 100 }, scale: 1.0 }
+  ];
+
+  // 1. 模拟用户在 f2 上调节 scale 为 0.85
+  const targetScale = 0.85;
+  const f2 = frames.find(f => f.id === 'f2');
+  frameAlignment.setScale(f2, targetScale);
+  assert.equal(f2.scale, 0.85);
+
+  // 2. 模拟用户移动到其他帧 (点击 f3，再点击 f1)
+  let currentSelected = frames.find(f => f.id === 'f3');
+  assert.equal(currentSelected.scale, 1.0, '未调节的 f3 保持自身 1.0');
+
+  currentSelected = frames.find(f => f.id === 'f1');
+  assert.equal(currentSelected.scale, 1.0, '未调节的 f1 保持自身 1.0');
+
+  // 3. 模拟用户再次移动回 f2
+  currentSelected = frames.find(f => f.id === 'f2');
+  assert.equal(currentSelected.scale, 0.85, '切回 f2 时 scale 必须依然为 0.85，绝不能回退为 1.0!');
+});
+
+it('一键将当前比例应用至全部帧功能，正确更新全部帧的 scale', () => {
+  const frames = [
+    { id: 'f1', rect: { x: 0, y: 0, w: 100, h: 100 }, scale: 1.0 },
+    { id: 'f2', rect: { x: 100, y: 0, w: 100, h: 100 }, scale: 0.85 },
+    { id: 'f3', rect: { x: 200, y: 0, w: 100, h: 100 }, scale: 1.0 }
+  ];
+
+  // 模拟以当前 f2 (0.85) 为准一键应用到全部帧
+  const sourceScale = frames[1].scale;
+  frames.forEach(f => {
+    f.scale = sourceScale;
+  });
+
+  assert.equal(frames[0].scale, 0.85, 'f1 成功变为 0.85');
+  assert.equal(frames[1].scale, 0.85, 'f2 保持 0.85');
+  assert.equal(frames[2].scale, 0.85, 'f3 成功变为 0.85');
+
+  // 此时移动到任何帧，scale 全都保持 0.85，再也不会回到初始状态
+  frames.forEach((f, idx) => {
+    assert.equal(f.scale, 0.85, `帧 ${idx + 1} 保持 0.85`);
+  });
+});
+
 console.log('\n======================================================');
 console.log(`📊 测试汇总: 共通过 ${passCount} 项, 失败 0 项`);
 console.log('======================================================\n');

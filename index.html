@@ -346,6 +346,17 @@
                 </div>
               </div>
 
+              <!-- 全部帧同步与一键应用操作行 -->
+              <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                <button class="btn btn-secondary btn-control-md" id="btn-apply-scale-all" style="flex: 1; min-width: 175px; font-weight: 600;" title="将当前帧的人物缩放比例一键应用到全部动作帧，使整套动画保持一致体型">
+                  🌟 应用此比例至全部帧
+                </button>
+                <label class="toggle-item-lg" style="font-size: 12px; margin: 0; cursor: pointer;" title="勾选后，无论拖动滑块还是微调，所有帧人物身量将同步联动缩放">
+                  <input type="checkbox" id="sync-all-scale-toggle">
+                  <span class="toggle-text" style="color: #ffd166; font-weight: 600;">🔗 锁定全部帧同步</span>
+                </label>
+              </div>
+
               <!-- 智能身高校准操作按钮组 -->
               <div class="button-grid-2">
                 <button class="btn btn-primary btn-pro-action" id="btn-auto-scale-all" title="以第1帧为基准，智能排除刀光等高空特效，一键自动校准所有帧的人物身高比例">

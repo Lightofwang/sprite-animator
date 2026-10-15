@@ -145,6 +145,8 @@ class SpriteAnimatorApp {
     this.scaleCompareCanvas = document.getElementById('scale-compare-canvas');
     this.scalePreviewGhostTag = document.getElementById('scale-preview-ghost-tag');
     this.scalePreviewCurrentTag = document.getElementById('scale-preview-current-tag');
+    this.btnApplyScaleAll = document.getElementById('btn-apply-scale-all');
+    this.syncAllScaleToggle = document.getElementById('sync-all-scale-toggle');
 
     // 播放器与视口控件
     this.btnPlayPause = document.getElementById('btn-play-pause');
@@ -984,11 +986,11 @@ class SpriteAnimatorApp {
       this.offsetYInput.addEventListener('change', handleOffsetChange);
     }
 
-    // 2.3 单帧人物缩放比例 (Scale) 事件绑定
-    const handleScaleChange = (newPercent, commit = true) => {
+    // 2.3 单帧与全局人物缩放比例 (Scale) 事件绑定
+    const handleScaleChange = (newPercent) => {
       let selectedFrame = state.getSelectedFrame();
+      const frames = state.get('frames') || [];
       if (!selectedFrame) {
-        const frames = state.get('frames') || [];
         if (frames.length > 0) {
           const currentIdx = (this.player && this.player.currentFrameIndex >= 0 && this.player.currentFrameIndex < frames.length)
             ? this.player.currentFrameIndex
@@ -1002,8 +1004,9 @@ class SpriteAnimatorApp {
         }
       }
 
-      const scale = frameAlignment.setScale(selectedFrame, newPercent / 100);
-      const percent = Math.round(scale * 100);
+      const syncAll = Boolean(this.syncAllScaleToggle && this.syncAllScaleToggle.checked);
+      const targetRatio = Math.max(0.2, Math.min(3.0, Math.round((newPercent / 100) * 1000) / 1000));
+      const percent = Math.round(targetRatio * 100);
 
       if (this.frameScaleSlider && document.activeElement !== this.frameScaleSlider) {
         this.frameScaleSlider.value = percent;
@@ -1015,99 +1018,127 @@ class SpriteAnimatorApp {
         this.frameScaleDisplay.textContent = `${percent}%`;
       }
 
-      // 直接同步内存中当前帧的 scale，确保视口毫秒级即时反映
-      selectedFrame.scale = scale;
-      if (commit) {
-        state.updateFrame(selectedFrame.id, { scale });
-      }
+      if (syncAll) {
+        // 同步锁定模式：将当前缩放实时应用到全部帧
+        frames.forEach(f => {
+          f.scale = targetRatio;
+        });
+        state.setState({ frames: [...frames] });
+        frames.forEach(f => {
+          this.updateSingleThumbnail(f.id);
+        });
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.renderScalePreviewViewport();
+        if (this.player && this.player.isPlaying) {
+          this.player.render();
+        }
+        this.setStatus(`[全部帧已同步缩放] 人物缩放比例统一为: ${percent}%`);
+      } else {
+        // 单帧独立模式：直接实时持久化到 state，绝不推迟，彻底避免切换帧时丢失！
+        selectedFrame.scale = targetRatio;
+        state.updateFrame(selectedFrame.id, { scale: targetRatio });
 
-      // 实时更新缩略图徽章、主画布、播放器视口以及步骤 3 的实时对比小舞台
-      this.updateSingleThumbnail(selectedFrame.id);
-      this.renderMainCanvas();
-      this.renderPlayerViewport();
-      this.renderScalePreviewViewport();
-      if (this.player && this.player.isPlaying) {
-        this.player.render();
+        this.updateSingleThumbnail(selectedFrame.id);
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.renderScalePreviewViewport();
+        if (this.player && this.player.isPlaying) {
+          this.player.render();
+        }
+        this.setStatus(`当前帧 [${selectedFrame.name || '选框'}] 人物缩放比例已调整为: ${percent}%`);
       }
-      this.setStatus(`当前帧 [${selectedFrame.name || '选框'}] 人物缩放比例已调整为: ${percent}%`);
     };
 
     if (this.frameScaleSlider) {
       this.frameScaleSlider.addEventListener('input', (e) => {
-        handleScaleChange(parseFloat(e.target.value) || 100, false);
+        handleScaleChange(parseFloat(e.target.value) || 100);
       });
       this.frameScaleSlider.addEventListener('change', (e) => {
-        handleScaleChange(parseFloat(e.target.value) || 100, true);
+        handleScaleChange(parseFloat(e.target.value) || 100);
       });
     }
 
     if (this.frameScaleInput) {
       this.frameScaleInput.addEventListener('change', (e) => {
-        handleScaleChange(parseFloat(e.target.value) || 100, true);
+        handleScaleChange(parseFloat(e.target.value) || 100);
       });
       this.frameScaleInput.addEventListener('input', (e) => {
         const val = parseFloat(e.target.value);
         if (!isNaN(val) && val >= 20 && val <= 300) {
-          handleScaleChange(val, false);
+          handleScaleChange(val);
         }
       });
     }
 
     if (this.btnScaleMinus) {
       this.btnScaleMinus.addEventListener('click', () => {
-        let selectedFrame = state.getSelectedFrame();
-        if (!selectedFrame) {
-          const frames = state.get('frames') || [];
-          if (frames.length > 0) {
-            state.selectFrame(frames[0].id);
-            selectedFrame = frames[0];
-          }
-        }
+        let selectedFrame = state.getSelectedFrame() || (state.get('frames')?.[0] || null);
         if (!selectedFrame) {
           this.showToast('请先选择动作帧', 'warning');
           return;
         }
         const curScale = (typeof selectedFrame.scale === 'number') ? selectedFrame.scale : 1.0;
-        handleScaleChange(Math.round((curScale - 0.05) * 100), true);
+        handleScaleChange(Math.round((curScale - 0.05) * 100));
       });
     }
 
     if (this.btnScalePlus) {
       this.btnScalePlus.addEventListener('click', () => {
-        let selectedFrame = state.getSelectedFrame();
-        if (!selectedFrame) {
-          const frames = state.get('frames') || [];
-          if (frames.length > 0) {
-            state.selectFrame(frames[0].id);
-            selectedFrame = frames[0];
-          }
-        }
+        let selectedFrame = state.getSelectedFrame() || (state.get('frames')?.[0] || null);
         if (!selectedFrame) {
           this.showToast('请先选择动作帧', 'warning');
           return;
         }
         const curScale = (typeof selectedFrame.scale === 'number') ? selectedFrame.scale : 1.0;
-        handleScaleChange(Math.round((curScale + 0.05) * 100), true);
+        handleScaleChange(Math.round((curScale + 0.05) * 100));
       });
     }
 
     if (this.btnResetScale) {
       this.btnResetScale.addEventListener('click', () => {
-        let selectedFrame = state.getSelectedFrame();
-        if (!selectedFrame) {
-          const frames = state.get('frames') || [];
-          if (frames.length > 0) {
-            state.selectFrame(frames[0].id);
-            selectedFrame = frames[0];
-          }
-        }
+        let selectedFrame = state.getSelectedFrame() || (state.get('frames')?.[0] || null);
         if (!selectedFrame) {
           this.showToast('请先选择动作帧', 'warning');
           return;
         }
         frameAlignment.resetScale(selectedFrame);
-        handleScaleChange(100, true);
-        this.setStatus('已恢复当前帧缩放为 100% 原始尺寸');
+        handleScaleChange(100);
+        this.setStatus('已恢复缩放为 100% 原始尺寸');
+      });
+    }
+
+    // 绑定【🌟 应用此比例至全部帧】按钮
+    if (this.btnApplyScaleAll) {
+      this.btnApplyScaleAll.addEventListener('click', () => {
+        const frames = state.get('frames') || [];
+        if (frames.length === 0) {
+          this.showToast('当前无可用动作帧', 'warning');
+          return;
+        }
+        const selectedFrame = state.getSelectedFrame() || frames[0];
+        const targetScale = (typeof selectedFrame.scale === 'number') ? selectedFrame.scale : 1.0;
+        const percent = Math.round(targetScale * 100);
+
+        frames.forEach(f => {
+          f.scale = targetScale;
+        });
+        state.setState({ frames: [...frames] });
+
+        frames.forEach(f => {
+          this.updateSingleThumbnail(f.id);
+        });
+        this.renderMainCanvas();
+        this.renderPlayerViewport();
+        this.renderScalePreviewViewport();
+        if (this.player) {
+          this.player.setFrames(frames);
+          this.player.render();
+        }
+
+        const msg = `🌟 已将缩放比例 ${percent}% 成功应用到全部 ${frames.length} 个动作帧！`;
+        this.setStatus(msg);
+        this.showToast(msg, 'success');
       });
     }
 
