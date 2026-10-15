@@ -128,12 +128,14 @@ class SpriteAnimatorApp {
     this.btnAlignAllGround = document.getElementById('btn-align-all-ground');
     this.btnResetOffset = document.getElementById('btn-reset-offset');
     this.onionSkinToggle = document.getElementById('onion-skin-toggle');
+    this.ghostOverlayToggle = document.getElementById('ghost-overlay-toggle');
     this.groundLineToggle = document.getElementById('ground-line-toggle');
 
     // 单帧人物缩放控制
     this.frameScaleSlider = document.getElementById('frame-scale-slider');
     this.frameScaleInput = document.getElementById('frame-scale-input');
     this.frameScaleDisplay = document.getElementById('frame-scale-display');
+    this.btnSuggestScale = document.getElementById('btn-suggest-scale');
     this.btnScaleMinus = document.getElementById('btn-scale-minus');
     this.btnScalePlus = document.getElementById('btn-scale-plus');
     this.btnResetScale = document.getElementById('btn-reset-scale');
@@ -985,6 +987,27 @@ class SpriteAnimatorApp {
         state.setPlayerState({ showGround: e.target.checked });
         this.renderPlayerViewport();
         this.setStatus(e.target.checked ? '已开启 XY 对齐参考标线、标尺刻度与准星标记' : '已关闭 XY 对齐标线');
+      });
+    }
+
+    // 4.2 基准帧幽灵透光台对比 (Ghost Overlay) 开关联动
+    if (this.ghostOverlayToggle) {
+      this.ghostOverlayToggle.addEventListener('change', (e) => {
+        state.setPlayerState({ ghostOverlay: e.target.checked });
+        this.renderPlayerViewport();
+        this.setStatus(e.target.checked ? '已开启基准帧幽灵透光台对比 (第1帧青蓝半透明剪影垫底)' : '已关闭基准透光对比');
+      });
+    }
+
+    // 4.3 智能身量推荐按钮点击直接应用
+    if (this.btnSuggestScale) {
+      this.btnSuggestScale.addEventListener('click', () => {
+        const suggestedVal = parseFloat(this.btnSuggestScale.dataset.suggestedScale);
+        if (!isNaN(suggestedVal) && suggestedVal > 0) {
+          handleScaleChange(Math.round(suggestedVal * 100));
+          this.setStatus(`已应用智能推荐身量比例: ${Math.round(suggestedVal * 100)}%`);
+          this.btnSuggestScale.style.display = 'none';
+        }
       });
     }
 
@@ -2452,6 +2475,9 @@ class SpriteAnimatorApp {
       if (this.onionSkinToggle) {
         this.onionSkinToggle.checked = Boolean(playerState.onionSkin);
       }
+      if (this.ghostOverlayToggle) {
+        this.ghostOverlayToggle.checked = Boolean(playerState.ghostOverlay);
+      }
       if (this.groundLineToggle) {
         this.groundLineToggle.checked = playerState.showGround !== false;
       }
@@ -2702,6 +2728,50 @@ class SpriteAnimatorApp {
     if (this.frameScaleDisplay) {
       this.frameScaleDisplay.textContent = `${percent}%`;
     }
+
+    // 智能更新当前帧身量建议徽章
+    this.updateScaleSuggestionUI(frame);
+  }
+
+  /**
+   * 智能更新当前帧身量缩放建议徽章 (Smart Suggestion Badge)
+   * 若检测到当前帧人物明显偏大或偏小，显示醒目的建议按钮，用户可一键精准采纳
+   * @param {Object|null} frame 
+   */
+  updateScaleSuggestionUI(frame) {
+    if (!this.btnSuggestScale) return;
+    if (!frame) {
+      this.btnSuggestScale.style.display = 'none';
+      return;
+    }
+
+    const frames = state.get('frames') || [];
+    const sourceImage = state.get('sourceImage');
+    if (!sourceImage || frames.length < 2 || frame.id === frames[0].id) {
+      this.btnSuggestScale.style.display = 'none';
+      return;
+    }
+
+    try {
+      const refFrame = frames[0];
+      const res = frameAlignment.autoNormalizeFrameScale(frame, refFrame, sourceImage);
+      if (res.success && typeof res.scale === 'number') {
+        const curScale = (typeof frame.scale === 'number') ? frame.scale : 1.0;
+        const curPercent = Math.round(curScale * 100);
+        const suggestedPercent = Math.round(res.scale * 100);
+
+        // 如果建议比例非 100% 且与当前设置有明显差异 (>= 3%)
+        if (suggestedPercent !== 100 && Math.abs(suggestedPercent - curPercent) >= 3) {
+          this.btnSuggestScale.style.display = 'inline-block';
+          this.btnSuggestScale.textContent = `💡 建议 ${suggestedPercent}%`;
+          this.btnSuggestScale.title = `智能检测到当前帧与基准帧身量偏差，点击一键应用 ${suggestedPercent}%`;
+          this.btnSuggestScale.dataset.suggestedScale = res.scale;
+          return;
+        }
+      }
+    } catch (_) {}
+
+    this.btnSuggestScale.style.display = 'none';
   }
 
   /**

@@ -169,6 +169,19 @@ it('面对零星残影/空白碎片帧 (如高度不足基准 30%)，应安全�
   assert.strictEqual(frameDebris.scale, 1.0, '碎片帧应保持 scale=1.0');
 });
 
+it('面对只有轻微像素波动的正常帧 (偏差在 ±5% 以内，如 120 vs 122)，死区保护应严格锁定 scale=1.0', () => {
+  const frame1 = { id: 'f1', rect: { x: 0, y: 0, w: 200, h: 200 }, scale: 1.0 };
+  const frameClose = { id: 'f_close', rect: { x: 0, y: 0, w: 200, h: 200 }, scale: 1.0 };
+
+  const boundsMap = new Map();
+  boundsMap.set('f1', { bodyH: 120, bodyMinY: 40, bodyMaxY: 159 });
+  boundsMap.set('f_close', { bodyH: 122, bodyMinY: 39, bodyMaxY: 160 }); // 偏差仅 1.6% (120/122=0.98)
+
+  const res = alignment.autoNormalizeFrameScale(frameClose, frame1, null, { boundsMap });
+  assert.strictEqual(res.success, true);
+  assert.strictEqual(frameClose.scale, 1.0, `轻微波动帧应被死区锁定为 1.0，实际为 ${frameClose.scale}`);
+});
+
 // --- 测试组 3: autoNormalizeAllScales 批量统一全帧身量 ---
 console.log('\n▶ [测试组 3] autoNormalizeAllScales 全部帧一键统一身量:');
 

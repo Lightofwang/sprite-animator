@@ -263,7 +263,10 @@
             <div class="control-row" style="margin-top: 6px;">
               <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
                 <span class="label-title" title="调节当前帧角色的缩放比例，脚底始终保持贴地">人物缩放 (Scale)</span>
-                <span id="frame-scale-display" style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-yellow); font-weight: 600;">100%</span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <button class="btn btn-secondary btn-sm" id="btn-suggest-scale" style="padding: 1px 6px; font-size: 10px; display: none; background: rgba(255, 190, 11, 0.18); border-color: var(--accent-yellow); color: var(--accent-yellow); cursor: pointer;" title="点击直接应用智能推荐的身量比例">💡 建议 92%</button>
+                  <span id="frame-scale-display" style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-yellow); font-weight: 600;">100%</span>
+                </div>
               </div>
               <div style="display: flex; align-items: center; gap: 4px; width: 100%;">
                 <input type="range" id="frame-scale-slider" min="50" max="150" step="1" value="100" style="flex: 1; accent-color: var(--accent-blue);" title="拖动无极调节角色大小 (50% ~ 150%)">
@@ -303,6 +306,10 @@
               <label class="toggle-item" title="显示洋葱皮半透明残影 (前一帧/后一帧)">
                 <input type="checkbox" id="onion-skin-toggle">
                 <span>洋葱皮残影</span>
+              </label>
+              <label class="toggle-item" title="将第1帧以青蓝色半透明剪影固定在底层作为参考基准，调节比例时一目了然">
+                <input type="checkbox" id="ghost-overlay-toggle">
+                <span>👻 基准透光重叠</span>
               </label>
               <label class="toggle-item" title="显示 XY 轴参考标线、像素标尺刻度、当前帧十字准星与偏移距离标注">
                 <input type="checkbox" id="ground-line-toggle" checked>

@@ -380,6 +380,13 @@ export class FrameAlignment {
     let idealScale = refHeight / targetHeight;
     idealScale = Math.max(0.4, Math.min(2.5, Math.round(idealScale * 100) / 100));
 
+    // 死区安全保护 (Deadzone Protection)：
+    // 偏差在 ±5% 以内（即 0.95 ~ 1.05 之间）的正常帧，严格锁定为 1.0 (100% 原始尺寸)，绝不扰动原本一致的帧
+    const deadzone = typeof options.deadzone === 'number' ? options.deadzone : 0.05;
+    if (Math.abs(idealScale - 1.0) <= deadzone) {
+      idealScale = 1.0;
+    }
+
     targetFrame.scale = idealScale;
 
     return {
@@ -807,6 +814,19 @@ export class FrameAlignment {
           tint: item.color
         });
       });
+    }
+
+    // 基准帧幽灵重叠透光台对比 (Ghost Reference Overlay)
+    // 当开启 ghostOverlay 且当前帧不是第 1 帧时，将第 1 帧以半透明青蓝色剪影固定绘制在基准位置上
+    const showGhost = Boolean(displayConfig.ghostOverlay);
+    if (showGhost && allFrames.length > 0) {
+      const refFrame = allFrames[0];
+      if (refFrame && currentFrame && refFrame.id !== currentFrame.id) {
+        this.renderFrameToContext(ctx, refFrame, sourceImage, 0, 0, {
+          alpha: 0.35,
+          tint: '#00e5ff' // 醒目的荧光青蓝色半透明剪影
+        });
+      }
     }
 
     // 当前主体帧 (在局部坐标系以 (0, 0) 为脚底基准对齐)

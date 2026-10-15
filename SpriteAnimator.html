@@ -1306,7 +1306,10 @@ body {
             <div class="control-row" style="margin-top: 6px;">
               <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
                 <span class="label-title" title="调节当前帧角色的缩放比例，脚底始终保持贴地">人物缩放 (Scale)</span>
-                <span id="frame-scale-display" style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-yellow); font-weight: 600;">100%</span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <button class="btn btn-secondary btn-sm" id="btn-suggest-scale" style="padding: 1px 6px; font-size: 10px; display: none; background: rgba(255, 190, 11, 0.18); border-color: var(--accent-yellow); color: var(--accent-yellow); cursor: pointer;" title="点击直接应用智能推荐的身量比例">💡 建议 92%</button>
+                  <span id="frame-scale-display" style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-yellow); font-weight: 600;">100%</span>
+                </div>
               </div>
               <div style="display: flex; align-items: center; gap: 4px; width: 100%;">
                 <input type="range" id="frame-scale-slider" min="50" max="150" step="1" value="100" style="flex: 1; accent-color: var(--accent-blue);" title="拖动无极调节角色大小 (50% ~ 150%)">
@@ -1346,6 +1349,10 @@ body {
               <label class="toggle-item" title="显示洋葱皮半透明残影 (前一帧/后一帧)">
                 <input type="checkbox" id="onion-skin-toggle">
                 <span>洋葱皮残影</span>
+              </label>
+              <label class="toggle-item" title="将第1帧以青蓝色半透明剪影固定在底层作为参考基准，调节比例时一目了然">
+                <input type="checkbox" id="ghost-overlay-toggle">
+                <span>👻 基准透光重叠</span>
               </label>
               <label class="toggle-item" title="显示 XY 轴参考标线、像素标尺刻度、当前帧十字准星与偏移距离标注">
                 <input type="checkbox" id="ground-line-toggle" checked>
@@ -2443,6 +2450,7 @@ class StateStore {
         loopMode: 'loop', // 'loop' | 'once' | 'pingpong'
         onionSkin: false,
         onionSkinOpacity: 0.30,
+        ghostOverlay: false,
         showGround: true,
         showPivot: true,
         zoom: 'auto',
@@ -4652,6 +4660,13 @@ class FrameAlignment {
     let idealScale = refHeight / targetHeight;
     idealScale = Math.max(0.4, Math.min(2.5, Math.round(idealScale * 100) / 100));
 
+    // 死区安全保护 (Deadzone Protection)：
+    // 偏差在 ±5% 以内（即 0.95 ~ 1.05 之间）的正常帧，严格锁定为 1.0 (100% 原始尺寸)，绝不扰动原本一致的帧
+    const deadzone = typeof options.deadzone === 'number' ? options.deadzone : 0.05;
+    if (Math.abs(idealScale - 1.0) <= deadzone) {
+      idealScale = 1.0;
+    }
+
     targetFrame.scale = idealScale;
 
     return {
@@ -5079,6 +5094,19 @@ class FrameAlignment {
           tint: item.color
         });
       });
+    }
+
+    // 基准帧幽灵重叠透光台对比 (Ghost Reference Overlay)
+    // 当开启 ghostOverlay 且当前帧不是第 1 帧时，将第 1 帧以半透明青蓝色剪影固定绘制在基准位置上
+    const showGhost = Boolean(displayConfig.ghostOverlay);
+    if (showGhost && allFrames.length > 0) {
+      const refFrame = allFrames[0];
+      if (refFrame && currentFrame && refFrame.id !== currentFrame.id) {
+        this.renderFrameToContext(ctx, refFrame, sourceImage, 0, 0, {
+          alpha: 0.35,
+          tint: '#00e5ff' // 醒目的荧光青蓝色半透明剪影
+        });
+      }
     }
 
     // 当前主体帧 (在局部坐标系以 (0, 0) 为脚底基准对齐)
@@ -8793,12 +8821,14 @@ class SpriteAnimatorApp {
     this.btnAlignAllGround = document.getElementById('btn-align-all-ground');
     this.btnResetOffset = document.getElementById('btn-reset-offset');
     this.onionSkinToggle = document.getElementById('onion-skin-toggle');
+    this.ghostOverlayToggle = document.getElementById('ghost-overlay-toggle');
     this.groundLineToggle = document.getElementById('ground-line-toggle');
 
     // 单帧人物缩放控制
     this.frameScaleSlider = document.getElementById('frame-scale-slider');
     this.frameScaleInput = document.getElementById('frame-scale-input');
     this.frameScaleDisplay = document.getElementById('frame-scale-display');
+    this.btnSuggestScale = document.getElementById('btn-suggest-scale');
     this.btnScaleMinus = document.getElementById('btn-scale-minus');
     this.btnScalePlus = document.getElementById('btn-scale-plus');
     this.btnResetScale = document.getElementById('btn-reset-scale');
@@ -9650,6 +9680,27 @@ class SpriteAnimatorApp {
         state.setPlayerState({ showGround: e.target.checked });
         this.renderPlayerViewport();
         this.setStatus(e.target.checked ? '已开启 XY 对齐参考标线、标尺刻度与准星标记' : '已关闭 XY 对齐标线');
+      });
+    }
+
+    // 4.2 基准帧幽灵透光台对比 (Ghost Overlay) 开关联动
+    if (this.ghostOverlayToggle) {
+      this.ghostOverlayToggle.addEventListener('change', (e) => {
+        state.setPlayerState({ ghostOverlay: e.target.checked });
+        this.renderPlayerViewport();
+        this.setStatus(e.target.checked ? '已开启基准帧幽灵透光台对比 (第1帧青蓝半透明剪影垫底)' : '已关闭基准透光对比');
+      });
+    }
+
+    // 4.3 智能身量推荐按钮点击直接应用
+    if (this.btnSuggestScale) {
+      this.btnSuggestScale.addEventListener('click', () => {
+        const suggestedVal = parseFloat(this.btnSuggestScale.dataset.suggestedScale);
+        if (!isNaN(suggestedVal) && suggestedVal > 0) {
+          handleScaleChange(Math.round(suggestedVal * 100));
+          this.setStatus(`已应用智能推荐身量比例: ${Math.round(suggestedVal * 100)}%`);
+          this.btnSuggestScale.style.display = 'none';
+        }
       });
     }
 
@@ -11117,6 +11168,9 @@ class SpriteAnimatorApp {
       if (this.onionSkinToggle) {
         this.onionSkinToggle.checked = Boolean(playerState.onionSkin);
       }
+      if (this.ghostOverlayToggle) {
+        this.ghostOverlayToggle.checked = Boolean(playerState.ghostOverlay);
+      }
       if (this.groundLineToggle) {
         this.groundLineToggle.checked = playerState.showGround !== false;
       }
@@ -11367,6 +11421,50 @@ class SpriteAnimatorApp {
     if (this.frameScaleDisplay) {
       this.frameScaleDisplay.textContent = `${percent}%`;
     }
+
+    // 智能更新当前帧身量建议徽章
+    this.updateScaleSuggestionUI(frame);
+  }
+
+  /**
+   * 智能更新当前帧身量缩放建议徽章 (Smart Suggestion Badge)
+   * 若检测到当前帧人物明显偏大或偏小，显示醒目的建议按钮，用户可一键精准采纳
+   * @param {Object|null} frame 
+   */
+  updateScaleSuggestionUI(frame) {
+    if (!this.btnSuggestScale) return;
+    if (!frame) {
+      this.btnSuggestScale.style.display = 'none';
+      return;
+    }
+
+    const frames = state.get('frames') || [];
+    const sourceImage = state.get('sourceImage');
+    if (!sourceImage || frames.length < 2 || frame.id === frames[0].id) {
+      this.btnSuggestScale.style.display = 'none';
+      return;
+    }
+
+    try {
+      const refFrame = frames[0];
+      const res = frameAlignment.autoNormalizeFrameScale(frame, refFrame, sourceImage);
+      if (res.success && typeof res.scale === 'number') {
+        const curScale = (typeof frame.scale === 'number') ? frame.scale : 1.0;
+        const curPercent = Math.round(curScale * 100);
+        const suggestedPercent = Math.round(res.scale * 100);
+
+        // 如果建议比例非 100% 且与当前设置有明显差异 (>= 3%)
+        if (suggestedPercent !== 100 && Math.abs(suggestedPercent - curPercent) >= 3) {
+          this.btnSuggestScale.style.display = 'inline-block';
+          this.btnSuggestScale.textContent = `💡 建议 ${suggestedPercent}%`;
+          this.btnSuggestScale.title = `智能检测到当前帧与基准帧身量偏差，点击一键应用 ${suggestedPercent}%`;
+          this.btnSuggestScale.dataset.suggestedScale = res.scale;
+          return;
+        }
+      }
+    } catch (_) {}
+
+    this.btnSuggestScale.style.display = 'none';
   }
 
   /**
