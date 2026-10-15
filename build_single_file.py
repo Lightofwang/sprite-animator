@@ -24,6 +24,7 @@ MODULE_FILES = [
     BASE_DIR / "js" / "core" / "overlap-isolator.js",
     BASE_DIR / "js" / "core" / "frame-alignment.js",
     BASE_DIR / "js" / "core" / "animation-player.js",
+    BASE_DIR / "js" / "core" / "snap-guides.js",
     BASE_DIR / "js" / "core" / "canvas-workspace.js",
     BASE_DIR / "js" / "core" / "gif-decoder.js",
     BASE_DIR / "js" / "core" / "exporter.js",

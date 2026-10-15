@@ -120,8 +120,21 @@ class StateStore {
         showPivot: true,
         zoom: 'auto',
         viewportScaleMode: 'auto'
-      }
+      },
+
+      // 拖动与拉伸选框时的智能横纵吸附对齐 (Snap Guides)
+      snapEnabled: true
     };
+  }
+
+  /**
+   * 切换智能横纵吸附状态
+   * @returns {boolean} 切换后的状态
+   */
+  toggleSnapEnabled() {
+    const nextVal = !this._state.snapEnabled;
+    this.setState({ snapEnabled: nextVal });
+    return nextVal;
   }
 
   /**

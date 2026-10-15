@@ -6,6 +6,7 @@
 
 import { state, eventBus } from './state.js';
 import { overlapIsolator } from './overlap-isolator.js';
+import { SnapGuides } from './snap-guides.js';
 
 export class CanvasWorkspace {
   /**
@@ -23,6 +24,10 @@ export class CanvasWorkspace {
     this.isMovingBox = false;
     this.isCreatingBox = false;
     this.spacePressed = false;
+    this.altPressed = false; // 是否按住 Alt 临时反转对齐吸附
+
+    // 横纵智能对齐吸附参考线
+    this.activeGuides = [];
 
     // 交叉消除专属工具交互状态
     this.isErasing = false;
@@ -647,13 +652,17 @@ export class CanvasWorkspace {
       this.isResizing = false;
       this.activeHandle = null;
       this.dragStartRect = null;
+      this.activeGuides = [];
       this.updateCursor();
+      this.requestRender();
     }
 
     if (this.isMovingBox) {
       this.isMovingBox = false;
       this.dragStartRect = null;
+      this.activeGuides = [];
       this.updateCursor();
+      this.requestRender();
     }
 
     if (this.isCreatingBox) {
@@ -731,16 +740,40 @@ export class CanvasWorkspace {
         break;
     }
 
-    const newRect = {
+    let rectBeforeSnap = {
       x: Math.round(l),
       y: Math.round(t),
       w: Math.round(Math.max(minSize, r - l)),
       h: Math.round(Math.max(minSize, b - t))
     };
 
-    state.updateFrame(selectedFrame.id, { rect: newRect });
+    // 智能横纵边缘吸附计算 (Resize Snap)
+    const isSnapActive = state.get('snapEnabled') ? !this.altPressed : this.altPressed;
+    if (isSnapActive && this.activeHandle) {
+      const vp = state.get('viewport');
+      const threshold = Math.max(4, Math.round(8 / (vp.zoom || 1.0)));
+      const otherFrames = (state.get('frames') || []).filter(f => f.id !== selectedFrame.id);
+
+      const resizeSnapRes = SnapGuides.calculateResizeSnap(
+        rectBeforeSnap,
+        this.activeHandle,
+        otherFrames,
+        {
+          threshold,
+          minSize,
+          imageBounds: img ? { width: imgW, height: imgH } : null
+        }
+      );
+
+      rectBeforeSnap = resizeSnapRes.snappedRect;
+      this.activeGuides = resizeSnapRes.guides;
+    } else {
+      this.activeGuides = [];
+    }
+
+    state.updateFrame(selectedFrame.id, { rect: rectBeforeSnap });
     if (this.onFrameRectChange) {
-      this.onFrameRectChange(selectedFrame.id, newRect);
+      this.onFrameRectChange(selectedFrame.id, rectBeforeSnap);
     }
   }
 
@@ -762,17 +795,41 @@ export class CanvasWorkspace {
     const targetX = this.dragStartRect.x + dx;
     const targetY = this.dragStartRect.y + dy;
 
-    // 限制在原图内部
+    // 限制在原图内部基础范围
     const maxX = Math.max(0, imgW - this.dragStartRect.w);
     const maxY = Math.max(0, imgH - this.dragStartRect.h);
 
-    const clampedX = Math.round(Math.max(0, Math.min(maxX, targetX)));
-    const clampedY = Math.round(Math.max(0, Math.min(maxY, targetY)));
+    let finalX = Math.round(Math.max(0, Math.min(maxX, targetX)));
+    let finalY = Math.round(Math.max(0, Math.min(maxY, targetY)));
+
+    // 智能横纵对齐吸附计算 (Snap to Other Frames & Image Bounds)
+    const isSnapActive = state.get('snapEnabled') ? !this.altPressed : this.altPressed;
+    if (isSnapActive) {
+      const vp = state.get('viewport');
+      const threshold = Math.max(4, Math.round(8 / (vp.zoom || 1.0)));
+      const otherFrames = (state.get('frames') || []).filter(f => f.id !== selectedFrame.id);
+
+      const snapRes = SnapGuides.calculateBoxSnap(
+        { x: finalX, y: finalY, w: this.dragStartRect.w, h: this.dragStartRect.h },
+        otherFrames,
+        {
+          threshold,
+          imageBounds: img ? { width: imgW, height: imgH } : null,
+          snapAdjacent: true
+        }
+      );
+
+      finalX = Math.max(0, Math.min(maxX, snapRes.snappedX));
+      finalY = Math.max(0, Math.min(maxY, snapRes.snappedY));
+      this.activeGuides = snapRes.guides;
+    } else {
+      this.activeGuides = [];
+    }
 
     const newRect = {
       ...this.dragStartRect,
-      x: clampedX,
-      y: clampedY
+      x: finalX,
+      y: finalY
     };
 
     state.updateFrame(selectedFrame.id, { rect: newRect });
@@ -1005,7 +1062,12 @@ export class CanvasWorkspace {
       }
 
       // 6. 工具切换快捷键
-      if (e.key === 'v' || e.key === 'V') {
+      if (e.key === 'Alt') {
+        this.altPressed = true;
+      } else if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        state.toggleSnapEnabled();
+      } else if (e.key === 'v' || e.key === 'V') {
         state.setCurrentTool('select');
       } else if (e.key === 'b' || e.key === 'B') {
         state.setCurrentTool('create_box');
@@ -1026,6 +1088,9 @@ export class CanvasWorkspace {
       if (e.code === 'Space') {
         this.spacePressed = false;
         this.updateCursor();
+      }
+      if (e.key === 'Alt') {
+        this.altPressed = false;
       }
     });
   }
@@ -1114,6 +1179,11 @@ export class CanvasWorkspace {
     // 6. 绘制橡皮擦圆形光圈光标
     if (state.get('currentTool') === 'eraser' && this.hoverScreenPos) {
       this.renderEraserCursorPreview();
+    }
+
+    // 7. 绘制智能横纵对齐吸附参考线 (Smart Alignment Guides)
+    if (this.activeGuides && this.activeGuides.length > 0) {
+      SnapGuides.renderGuides(ctx, this.activeGuides, (wx, wy) => this.worldToScreen(wx, wy));
     }
   }
 

@@ -91,6 +91,7 @@ class SpriteAnimatorApp {
     this.frameHInput = document.getElementById('frame-h');
     this.btnUnifySize = document.getElementById('btn-unify-size');
     this.btnGridSlice = document.getElementById('btn-grid-slice');
+    this.btnToggleSnap = document.getElementById('btn-toggle-snap');
     this.playerZoomSelect = document.getElementById('player-zoom-select');
 
     // 统一尺寸与网格切片模态框元素
@@ -475,6 +476,7 @@ class SpriteAnimatorApp {
     // 统一尺寸与网格切片弹窗逻辑绑定
     this.bindUnifySizeModal();
     this.bindGridSliceModal();
+    this.bindSnapToggle();
 
     // 播放器视口缩放模式下拉选择
     if (this.playerZoomSelect) {
@@ -2537,6 +2539,38 @@ class SpriteAnimatorApp {
         this.setStatus(`均等网格切片完成: 共生成 ${newFrames.length} 帧${filterMsg}${alignMsg}，单帧规格 ${cellW} × ${cellH} px`);
       });
     }
+  }
+
+  /**
+   * 绑定智能横纵吸附对齐按钮事件
+   */
+  bindSnapToggle() {
+    const updateButtonUI = (enabled) => {
+      if (!this.btnToggleSnap) return;
+      if (enabled) {
+        this.btnToggleSnap.classList.add('active');
+        this.btnToggleSnap.textContent = '🧲 智能吸附: 开';
+        this.btnToggleSnap.title = '智能吸附已开启 (快捷键 S 切换，拖动时按住 Alt 临时自由移动)';
+      } else {
+        this.btnToggleSnap.classList.remove('active');
+        this.btnToggleSnap.textContent = '🧲 智能吸附: 关';
+        this.btnToggleSnap.title = '智能吸附已关闭 (快捷键 S 切换，拖动时按住 Alt 临时吸附)';
+      }
+    };
+
+    if (this.btnToggleSnap) {
+      this.btnToggleSnap.addEventListener('click', () => {
+        const nextState = state.toggleSnapEnabled();
+        this.setStatus(nextState ? '已开启选框横纵对齐吸附 (对齐边缘、中心与相邻贴靠)' : '已关闭选框智能吸附 (自由像素移动)');
+        this.showToast(nextState ? '🧲 已开启智能对齐吸附' : '已关闭吸附 (自由像素移动)', 'info');
+      });
+    }
+
+    state.subscribe('snapEnabled', (enabled) => {
+      updateButtonUI(enabled);
+    });
+
+    updateButtonUI(state.get('snapEnabled'));
   }
 
   /**
