@@ -136,12 +136,12 @@
     <!-- 工作台主体区域 -->
     <!-- 全网页自适应纵向长流主工作区 (高度不固定，全局顺畅滚动) -->
     <main class="main-workspace">
-      <!-- 板块 1：🎬 动画播放与动图预览区 (默认展开) -->
-      <section class="flow-section panel-player" id="panel-player" data-card-id="section-player">
+      <!-- 板块 1：🎬 动画播放与动作帧序列 (预览与帧列表一体化联动，可整体折叠) -->
+      <section class="flow-section panel-player" id="panel-player" data-card-id="section-player-frames">
         <div class="flow-section-header">
           <div class="flow-section-title">
             <span class="section-icon">🎬</span>
-            <span>动画播放与动图预览</span>
+            <span>动画播放与动作帧序列 (<span id="frame-count-badge">0</span> 帧)</span>
           </div>
           <div class="flow-section-actions">
             <select class="select-input" id="player-zoom-select" title="播放器画面显示比例" style="max-width: 110px;">
@@ -160,39 +160,62 @@
             <button class="btn btn-icon btn-secondary" id="btn-toggle-fullscreen-player" title="最大化 / 展开大屏视口预览">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
             </button>
-            <span class="flow-section-arrow" title="收起/展开动画播放预览">▾</span>
+            <span class="flow-section-arrow" title="收起/展开动画与帧序列">▾</span>
           </div>
         </div>
         <div class="flow-section-body">
-          <!-- 播放器视口舞台 (超大高清舞台) -->
-          <div class="flow-player-stage checkerboard-bg" id="player-wrapper">
-            <canvas id="player-canvas" width="600" height="400"></canvas>
-            <div class="player-frame-indicator" id="player-frame-indicator">0 / 0</div>
-          </div>
-          <!-- 播放器大号控制面板 -->
-          <div class="flow-player-controls">
-            <div class="playback-buttons">
-              <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-first-frame" title="第一帧 (Home)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
-              </button>
-              <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-prev-frame" title="上一帧 (← / ,)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/></svg>
-              </button>
-              <button class="btn play-toggle-btn btn-play-lg" id="btn-play-pause" title="播放/暂停 (Space)">
-                <span id="play-icon">▶</span>
-              </button>
-              <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-next-frame" title="下一帧 (→ / .)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/></svg>
-              </button>
-              <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-last-frame" title="最后一帧 (End)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-              </button>
+          <div class="preview-frames-container">
+            <!-- 左侧：高清动画播放舞台与控制器 -->
+            <div class="preview-player-column">
+              <div class="preview-player-stage checkerboard-bg" id="player-wrapper">
+                <canvas id="player-canvas" width="480" height="380"></canvas>
+                <div class="player-frame-indicator" id="player-frame-indicator">0 / 0</div>
+              </div>
+              <div class="preview-player-controls">
+                <div class="playback-buttons">
+                  <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-first-frame" title="第一帧 (Home)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+                  </button>
+                  <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-prev-frame" title="上一帧 (← / ,)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/></svg>
+                  </button>
+                  <button class="btn play-toggle-btn btn-play-lg" id="btn-play-pause" title="播放/暂停 (Space)">
+                    <span id="play-icon">▶</span>
+                  </button>
+                  <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-next-frame" title="下一帧 (→ / .)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/></svg>
+                  </button>
+                  <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-last-frame" title="最后一帧 (End)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                  </button>
+                </div>
+                <div class="control-row-lg" style="margin-top: 2px;">
+                  <span class="label-title-lg">帧率 (FPS):</span>
+                  <input type="range" id="fps-slider" min="1" max="60" value="12" class="pro-slider">
+                  <span class="fps-display-lg" id="fps-display">12 FPS</span>
+                </div>
+              </div>
             </div>
-            <!-- 大号帧率滑块 -->
-            <div class="control-row-lg" style="max-width: 600px; margin: 4px auto 0; width: 100%;">
-              <span class="label-title-lg">帧率 (FPS):</span>
-              <input type="range" id="fps-slider" min="1" max="60" value="12" class="pro-slider">
-              <span class="fps-display-lg" id="fps-display">12 FPS</span>
+
+            <!-- 右侧：动作帧序列时间轴大网格 (自然占据全部横向空间！) -->
+            <div class="preview-frames-column">
+              <div class="preview-frames-toolbar">
+                <span class="label-title-lg" style="color: var(--text-main); font-weight: 700;">动作帧序列时间轴</span>
+                <div style="display: flex; gap: 6px;">
+                  <button class="btn btn-icon btn-secondary btn-control-md" id="btn-add-frame" title="添加新选框">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                  <button class="btn btn-icon btn-secondary btn-control-md" id="btn-delete-frame" title="删除当前选中的单帧 (Delete)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                  <button class="btn btn-icon btn-danger btn-control-md" id="btn-clear-frames" title="清空全部选框">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="preview-frames-grid" id="frame-list">
+                <!-- 动态注入帧缩略图卡片 -->
+              </div>
             </div>
           </div>
         </div>
@@ -244,8 +267,8 @@
           </div>
 
           <!-- 主画布视口 (全宽舒适操作) -->
-          <div class="canvas-viewport-wrapper checkerboard-bg" id="viewport-container" style="width: 100%; height: 560px;">
-            <canvas id="main-canvas" width="1200" height="560"></canvas>
+          <div class="canvas-viewport-wrapper checkerboard-bg" id="viewport-container" style="width: 100%; height: 600px;">
+            <canvas id="main-canvas" width="1200" height="600"></canvas>
             
             <!-- 空状态提示与拖拽放置区 -->
             <div class="empty-placeholder" id="empty-placeholder">
@@ -272,35 +295,7 @@
         </div>
       </section>
 
-      <!-- 板块 3：🎞️ 动作帧序列列表 (默认展开) -->
-      <section class="flow-section" id="section-frames" data-card-id="section-frames">
-        <div class="flow-section-header">
-          <div class="flow-section-title">
-            <span class="section-icon">🎞️</span>
-            <span>动作帧序列列表 (<span id="frame-count-badge">0</span>)</span>
-          </div>
-          <div class="flow-section-actions">
-            <button class="btn btn-icon btn-secondary btn-control-md" id="btn-add-frame" title="添加新选框">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </button>
-            <button class="btn btn-icon btn-secondary btn-control-md" id="btn-delete-frame" title="删除当前选中的单帧 (Delete)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </button>
-            <button class="btn btn-icon btn-danger btn-control-md" id="btn-clear-frames" title="清空全部选框">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-            </button>
-            <span class="flow-section-arrow" title="收起/展开动作帧序列">▾</span>
-          </div>
-        </div>
-        <div class="flow-section-body">
-          <!-- 动作帧列表，随帧数量自适应自由铺展 -->
-          <div class="flow-frames-list" id="frame-list">
-            <!-- 动态注入帧缩略图卡片 -->
-          </div>
-        </div>
-      </section>
-
-      <!-- 板块 4：🎯 人物缩放与身量对齐校准 (默认展开) -->
+      <!-- 板块 3：🎯 人物缩放与身量对齐校准 (默认展开) -->
       <section class="flow-section" id="section-alignment" data-card-id="section-alignment">
         <div class="flow-section-header">
           <div class="flow-section-title">

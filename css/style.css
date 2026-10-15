@@ -1,43 +1,43 @@
 /**
  * @file style.css
- * @description Sprite Animator 现代化深色专业工作台主题 (Dark Pro UI)
+ * @description Sprite Animator 现代化高质感浅色专业工作台主题 (Light Clean Pro UI)
  */
 
 :root {
-  --bg-app: #121216;
-  --bg-toolbar: #181820;
-  --bg-panel: #1f1f28;
-  --bg-subpanel: #272734;
-  --bg-input: #15151c;
-  --bg-hover: #323243;
-  --bg-active: #3c3c52;
+  --bg-app: #f1f5f9;
+  --bg-toolbar: #ffffff;
+  --bg-panel: #ffffff;
+  --bg-subpanel: #f8fafc;
+  --bg-input: #ffffff;
+  --bg-hover: #f1f5f9;
+  --bg-active: #e2e8f0;
 
-  --border-color: #2e2e3e;
-  --border-light: #3f3f54;
-  --border-focus: #3a86ff;
+  --border-color: #e2e8f0;
+  --border-light: #cbd5e1;
+  --border-focus: #2563eb;
 
-  --text-main: #f2f2f7;
-  --text-sub: #a4a4ba;
-  --text-muted: #6c6c82;
+  --text-main: #0f172a;
+  --text-sub: #475569;
+  --text-muted: #94a3b8;
 
-  --accent-blue: #3a86ff;
-  --accent-blue-hover: #5497ff;
-  --accent-blue-subtle: rgba(58, 134, 255, 0.15);
-  --accent-pink: #ff006e;
-  --accent-green: #06d6a0;
-  --accent-yellow: #ffd166;
-  --accent-red: #ef476f;
+  --accent-blue: #2563eb;
+  --accent-blue-hover: #1d4ed8;
+  --accent-blue-subtle: rgba(37, 99, 235, 0.08);
+  --accent-pink: #ec4899;
+  --accent-green: #059669;
+  --accent-yellow: #d97706;
+  --accent-red: #ef4444;
 
   --radius-sm: 4px;
   --radius-md: 6px;
-  --radius-lg: 8px;
+  --radius-lg: 10px;
 
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 
   --checker-size: 16px;
-  --checker-c1: #22222c;
-  --checker-c2: #191921;
+  --checker-c1: #ffffff;
+  --checker-c2: #e9ecf2;
 }
 
 * {
@@ -61,7 +61,7 @@ body {
   scroll-behavior: smooth;
 }
 
-/* 棋盘格透明背景 */
+/* 棋盘格透明背景 (清爽明亮浅灰白格) */
 .checkerboard-bg {
   background-color: var(--checker-c1);
   background-image: 
@@ -73,7 +73,7 @@ body {
   background-position: 0 0, 0 calc(var(--checker-size) / 2), calc(var(--checker-size) / 2) calc(-1 * var(--checker-size) / 2), calc(-1 * var(--checker-size) / 2) 0px;
 }
 
-/* 自定义全局流动滚动条 */
+/* 自定义全局流动滚动条 (细腻浅灰色) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -82,11 +82,11 @@ body {
   background: var(--bg-app);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-light);
+  background: #cbd5e1;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-sub);
+  background: #94a3b8;
 }
 
 /* 布局结构 (全网页长页面流动体系) */
@@ -97,20 +97,20 @@ body {
   width: 100%;
 }
 
-/* 1. 顶部工具栏 (Sticky 随滚动吸顶) */
+/* 1. 顶部工具栏 (Sticky 随滚动吸顶，纯白白底微阴影) */
 .top-toolbar {
-  height: 48px;
+  height: 50px;
   background-color: var(--bg-toolbar);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 20px;
   position: sticky;
   top: 0;
   z-index: 100;
   gap: 12px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .toolbar-section {
@@ -182,7 +182,7 @@ body {
 
 .btn:hover {
   background-color: var(--bg-hover);
-  color: #fff;
+  color: var(--text-main);
 }
 
 .btn:active {
@@ -193,18 +193,22 @@ body {
 .btn-primary {
   background-color: var(--accent-blue);
   color: #fff;
+  border-color: var(--accent-blue);
 }
 .btn-primary:hover {
   background-color: var(--accent-blue-hover);
+  color: #fff;
 }
 
 .btn-secondary {
-  background-color: var(--bg-subpanel);
+  background-color: #ffffff;
   border-color: var(--border-color);
+  color: var(--text-main);
 }
 .btn-secondary:hover {
   background-color: var(--bg-hover);
   border-color: var(--border-light);
+  color: var(--accent-blue);
 }
 
 .btn-danger {
@@ -313,45 +317,45 @@ body {
   color: #fff;
 }
 
-/* 2. 全网页长页面自适应主容器 (高度不固定，全局顺畅滚动) */
+/* 2. 全网页长页面自适应主容器 (100% 横向铺满，大气开阔，视野极其宽广) */
 .main-workspace {
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 24px 28px 80px;
-  max-width: 1440px;
-  margin: 0 auto;
+  padding: 20px 24px 80px;
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
 }
 
-/* 四大可折叠长流板块卡片体系 (Flow Section System) */
+/* 核心长流板块卡片体系 (Light Pro Flow Section System) */
 .flow-section {
   background-color: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 16px rgba(0, 0, 0, 0.03);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .flow-section:hover {
-  border-color: var(--border-light);
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.04);
 }
 
 .flow-section-header {
   height: 48px;
-  background-color: var(--bg-subpanel);
+  background-color: #f8fafc;
   border-bottom: 1px solid transparent;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 18px;
+  padding: 0 20px;
   cursor: pointer;
   user-select: none;
   transition: background-color 0.15s ease;
 }
 .flow-section-header:hover {
-  background-color: var(--bg-hover);
+  background-color: #f1f5f9;
 }
 .flow-section:not(.collapsed) .flow-section-header {
   border-bottom-color: var(--border-color);
@@ -387,7 +391,7 @@ body {
   transition: transform 0.2s ease, color 0.15s ease;
 }
 .flow-section-header:hover .flow-section-arrow {
-  color: #fff;
+  color: var(--accent-blue);
 }
 .flow-section.collapsed .flow-section-arrow {
   transform: rotate(-90deg);
@@ -401,30 +405,89 @@ body {
   display: none;
 }
 
-/* 板块 1：播放器舞台与控制 */
-.flow-player-stage {
+/* 动画预览与动作帧序列一体化容器 (Preview & Frames Joint Layout) */
+.preview-frames-container {
+  display: flex;
+  flex-direction: row;
   width: 100%;
-  height: 420px;
+  min-height: 480px;
+}
+@media (max-width: 1080px) {
+  .preview-frames-container {
+    flex-direction: column;
+  }
+}
+
+/* 左侧：播放器舞台与控制器 (固定宽度 500px) */
+.preview-player-column {
+  width: 500px;
+  min-width: 440px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-color);
+  background-color: #ffffff;
+}
+@media (max-width: 1080px) {
+  .preview-player-column {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+  }
+}
+
+.preview-player-stage {
+  height: 380px;
   position: relative;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #12131a;
+  background-color: #fafbfc;
 }
-.flow-player-controls {
-  background-color: var(--bg-toolbar);
+
+.preview-player-controls {
+  padding: 14px 20px;
+  background-color: #ffffff;
   border-top: 1px solid var(--border-color);
-  padding: 12px 18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+/* 右侧：动作帧序列时间轴大网格 (自然占据剩余全部宽度！) */
+.preview-frames-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #f8fafc;
+  min-height: 480px;
+}
+
+.preview-frames-toolbar {
+  height: 44px;
+  padding: 0 18px;
+  background-color: #ffffff;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.preview-frames-grid {
+  flex: 1;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+  gap: 12px;
+  align-content: start;
+  overflow-y: auto;
+  max-height: 460px;
+}
+
 /* 板块 2：主画布切片工作台 */
 .flow-canvas-viewport {
   width: 100%;
-  height: 560px;
+  height: 600px;
   position: relative;
   overflow: hidden;
   display: flex;
@@ -432,9 +495,9 @@ body {
   justify-content: center;
 }
 .flow-slice-bar {
-  background-color: var(--bg-toolbar);
+  background-color: #f8fafc;
   border-bottom: 1px solid var(--border-color);
-  padding: 10px 18px;
+  padding: 10px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -442,22 +505,12 @@ body {
   flex-wrap: wrap;
 }
 
-/* 板块 3：动作帧序列列表 */
-.flow-frames-list {
-  padding: 16px 18px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
-  gap: 12px;
-  align-content: start;
-  min-height: 160px;
-}
-
-/* 板块 4：人物缩放与对齐双列网格 */
+/* 板块 3：人物缩放与对齐双列网格 */
 .alignment-scale-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  padding: 16px 18px;
+  gap: 20px;
+  padding: 20px;
 }
 @media (max-width: 900px) {
   .alignment-scale-grid {
@@ -465,13 +518,14 @@ body {
   }
 }
 .flow-card-sub {
-  background-color: var(--bg-subpanel);
+  background-color: #ffffff;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 .flow-card-sub-title {
   font-size: 13px;
@@ -481,7 +535,7 @@ body {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--border-color);
-  padding-bottom: 8px;
+  padding-bottom: 10px;
   margin-bottom: 2px;
 }
 
@@ -1119,7 +1173,7 @@ body {
   grid-template-columns: repeat(3, 28px);
   grid-template-rows: repeat(3, 28px);
   gap: 4px;
-  background: var(--bg-input);
+  background: #f1f5f9;
   padding: 5px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
@@ -1128,6 +1182,16 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 4px;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+}
+.pivot-grid-lg .pivot-dot:hover {
+  background: #e2e8f0;
+}
+.pivot-grid-lg .pivot-dot.active {
+  background: var(--accent-pink);
+  border-color: var(--accent-pink);
+  color: #fff;
 }
 .pivot-grid-lg .pivot-dot::after {
   width: 6px;
