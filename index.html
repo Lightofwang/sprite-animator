@@ -175,156 +175,20 @@
         </footer>
       </section>
 
-      <!-- 右侧侧边栏面板 -->
+      <!-- 右侧侧边栏面板 (纵向滚动大卡片手风琴工作台) -->
       <aside class="sidebar-panel" id="sidebar-panel">
         <!-- 侧边栏宽度可拖拽调整把手 -->
         <div id="sidebar-resizer" class="sidebar-resizer" title="按住并左右拖拽调整右侧面板宽度"></div>
 
-        <!-- 上半部：帧管理与对齐设置 -->
-        <div class="sidebar-section panel-frames">
-          <div class="section-header">
-            <span>动作帧列表 (<span id="frame-count-badge">0</span>)</span>
-            <div class="actions">
-              <button class="btn btn-icon btn-secondary" id="btn-add-frame" title="添加新选框">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              </button>
-              <button class="btn btn-icon btn-secondary" id="btn-delete-frame" title="删除当前选中的单帧 (Delete)">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              </button>
-              <button class="btn btn-icon btn-danger" id="btn-clear-frames" title="清空全部选框">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-              </button>
+        <!-- 卡片 1：🎬 实时动画播放器 (默认展开) -->
+        <div class="accordion-card panel-player" id="panel-player" data-card-id="card-player">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="card-title-icon">🎬</span>
+              <span class="card-title-text">实时动画播放器</span>
             </div>
-          </div>
-
-          <!-- 帧缩略图序列网格 -->
-          <div class="frame-list-wrapper" id="frame-list">
-            <!-- 动态注入帧缩略图卡片 -->
-          </div>
-
-          <!-- 选框尺寸与统一规格卡片 -->
-          <div class="alignment-controls-card box-size-controls-card">
-            <div class="control-row">
-              <span class="label-title">选框尺寸 (W × H)</span>
-              <div class="offset-inputs">
-                <div class="coord-field">
-                  <span>宽:</span>
-                  <input type="number" id="frame-w" min="4" placeholder="宽" title="当前帧选框宽度 (Enter应用)">
-                </div>
-                <div class="coord-field">
-                  <span>高:</span>
-                  <input type="number" id="frame-h" min="4" placeholder="高" title="当前帧选框高度 (Enter应用)">
-                </div>
-              </div>
-            </div>
-            <div class="control-row" style="margin-top: 6px; display: flex; gap: 6px;">
-              <button class="btn btn-secondary btn-sm" id="btn-unify-size" style="flex: 1;" title="将全部选框尺寸统一为相同大小（以脚底中心对齐）">
-                📐 统一全部尺寸
-              </button>
-              <button class="btn btn-secondary btn-sm" id="btn-grid-slice" style="flex: 1;" title="按行与列生成均等网格选框">
-                ⊞ 网格等分切片
-              </button>
-            </div>
-          </div>
-
-          <!-- 锚点与对齐控制卡片 -->
-          <div class="alignment-controls-card">
-            <div class="control-row">
-              <span class="label-title">锚点对齐 (Pivot)</span>
-              <!-- 九宫格快速对齐按钮 -->
-              <div class="pivot-grid" id="pivot-grid" title="九宫格快速锚点定位">
-                <div class="pivot-dot" data-pivot="top-left" title="左上角"></div>
-                <div class="pivot-dot" data-pivot="top-center" title="中上"></div>
-                <div class="pivot-dot" data-pivot="top-right" title="右上角"></div>
-                <div class="pivot-dot" data-pivot="center-left" title="左中"></div>
-                <div class="pivot-dot" data-pivot="center" title="正中心"></div>
-                <div class="pivot-dot" data-pivot="center-right" title="右中"></div>
-                <div class="pivot-dot" data-pivot="bottom-left" title="左下角"></div>
-                <div class="pivot-dot active" data-pivot="bottom-center" title="底部中心 (默认地面脚底)"></div>
-                <div class="pivot-dot" data-pivot="bottom-right" title="右下角"></div>
-              </div>
-            </div>
-
-            <div class="control-row">
-              <span class="label-title">偏移微调</span>
-              <div class="offset-inputs">
-                <div class="coord-field">
-                  <span>X:</span>
-                  <input type="number" id="offset-x" value="0" title="水平偏移量 (也可直接在下方播放器拖拽人物调节)">
-                </div>
-                <div class="coord-field">
-                  <span>Y:</span>
-                  <input type="number" id="offset-y" value="0" title="垂直偏移量 (正数向下贴地，负数向上腾空)">
-                </div>
-              </div>
-            </div>
-
-            <!-- 单帧人物缩放调节 -->
-            <div class="control-row" style="margin-top: 6px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 4px;">
-                <span class="label-title" title="调节当前帧角色的缩放比例，脚底始终保持贴地">人物缩放 (Scale)</span>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                  <button class="btn btn-secondary btn-sm" id="btn-suggest-scale" style="padding: 1px 6px; font-size: 10px; display: none; background: rgba(255, 190, 11, 0.18); border-color: var(--accent-yellow); color: var(--accent-yellow); cursor: pointer;" title="点击直接应用智能推荐的身量比例">💡 建议 92%</button>
-                  <span id="frame-scale-display" style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-yellow); font-weight: 600;">100%</span>
-                </div>
-              </div>
-              <div style="display: flex; align-items: center; gap: 4px; width: 100%;">
-                <input type="range" id="frame-scale-slider" min="50" max="150" step="1" value="100" style="flex: 1; accent-color: var(--accent-blue);" title="拖动无极调节角色大小 (50% ~ 150%)">
-                <input type="number" id="frame-scale-input" min="20" max="300" step="1" value="100" style="width: 48px; padding: 2px 4px; font-size: 11px; text-align: center; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;" title="直接输入百分比 (20% ~ 300%)">
-                <button class="btn btn-secondary btn-sm" id="btn-scale-minus" style="padding: 2px 5px; font-size: 10px;" title="微调缩小 5%">-5%</button>
-                <button class="btn btn-secondary btn-sm" id="btn-scale-plus" style="padding: 2px 5px; font-size: 10px;" title="微调放大 5%">+5%</button>
-                <button class="btn btn-secondary btn-sm" id="btn-reset-scale" style="padding: 2px 5px; font-size: 10px;" title="恢复默认 100% 原始尺寸">↺ 100%</button>
-              </div>
-            </div>
-
-            <!-- 一键智能自动身高校准 -->
-            <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
-              <button class="btn btn-primary btn-sm" id="btn-auto-scale-all" style="flex: 1; padding: 4px 6px; font-size: 11px;" title="以第1帧为基准，智能排除刀光等高空特效，一键自动校准所有帧的人物身高比例">
-                🎯 全部自动对齐身量
-              </button>
-              <button class="btn btn-secondary btn-sm" id="btn-auto-scale-frame" style="padding: 4px 6px; font-size: 11px;" title="将当前选中帧的人物身高一键校准到与第1帧一致">
-                📏 当前帧校准
-              </button>
-            </div>
-
-            <div class="control-row" style="margin-top: 6px; display: flex; gap: 4px;">
-              <button class="btn btn-primary btn-sm" id="btn-align-all-xy" style="flex: 1; padding: 4px 6px; font-size: 11px;" title="一键按角色重心与地面线自动对齐全部帧，之后可在下方预览框直接鼠标拖拽自由微调">
-                🎯 全部自动对齐
-              </button>
-              <button class="btn btn-secondary btn-sm" id="btn-align-all-ground" style="flex: 1; padding: 4px 6px; font-size: 11px;" title="仅将全部帧的最低像素贴合到地面基准线（保留现有X轴）">
-                ⏬ 全部Y贴地
-              </button>
-              <button class="btn btn-secondary btn-sm" id="btn-align-frame-ground" style="flex: 1; padding: 4px 6px; font-size: 11px;" title="将当前选中帧的最低像素贴合到地面基准线">
-                ⏬ 当前帧贴地
-              </button>
-              <button class="btn btn-secondary btn-sm" id="btn-reset-offset" style="padding: 4px 6px; font-size: 11px;" title="将当前帧 X/Y 偏移量重置归零">
-                ↺ 归零
-              </button>
-            </div>
-
-            <div class="control-row">
-              <label class="toggle-item" title="显示洋葱皮半透明残影 (前一帧/后一帧)">
-                <input type="checkbox" id="onion-skin-toggle">
-                <span>洋葱皮残影</span>
-              </label>
-              <label class="toggle-item" title="将第1帧以青蓝色半透明剪影固定在底层作为参考基准，调节比例时一目了然">
-                <input type="checkbox" id="ghost-overlay-toggle">
-                <span>👻 基准透光重叠</span>
-              </label>
-              <label class="toggle-item" title="显示 XY 轴参考标线、像素标尺刻度、当前帧十字准星与偏移距离标注">
-                <input type="checkbox" id="ground-line-toggle" checked>
-                <span>XY 对齐标线</span>
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <!-- 下半部：实时动画播放器视口 -->
-        <div class="sidebar-section panel-player" id="panel-player">
-          <div class="section-header">
-            <span>实时动画播放器</span>
-            <div class="actions">
-              <select class="select-input" id="player-zoom-select" title="播放器画面显示比例" style="max-width: 100px;">
+            <div class="card-header-actions">
+              <select class="select-input" id="player-zoom-select" title="播放器画面显示比例" style="max-width: 105px;">
                 <option value="auto" selected>自适应完整</option>
                 <option value="1.0">100% 原始</option>
                 <option value="0.75">75%</option>
@@ -332,49 +196,245 @@
                 <option value="0.35">35%</option>
                 <option value="0.25">25%</option>
               </select>
-              <select class="select-input" id="loop-mode-select" title="播放循环模式" style="max-width: 110px;">
+              <select class="select-input" id="loop-mode-select" title="播放循环模式" style="max-width: 105px;">
                 <option value="loop">循环播放</option>
                 <option value="once">单次播放</option>
                 <option value="pingpong">往返乒乓</option>
               </select>
-              <button class="btn btn-icon btn-secondary" id="btn-toggle-fullscreen-player" title="最大化 / 展开大屏视口预览" style="margin-left: 4px;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+              <button class="btn btn-icon btn-secondary" id="btn-toggle-fullscreen-player" title="最大化 / 展开大屏视口预览">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
               </button>
+              <span class="card-arrow" title="收起/展开卡片">▾</span>
             </div>
           </div>
-
-          <!-- 播放器视口舞台 (超大高清视口) -->
-          <div class="player-stage-wrapper checkerboard-bg" id="player-wrapper">
-            <canvas id="player-canvas" width="460" height="380"></canvas>
-            <div class="player-frame-indicator" id="player-frame-indicator">0 / 0</div>
-          </div>
-
-          <!-- 播放器控制面板 -->
-          <div class="player-controls-card">
-            <!-- 播放控制按钮栏 -->
-            <div class="playback-buttons">
-              <button class="btn btn-icon btn-secondary" id="btn-first-frame" title="第一帧 (Home)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
-              </button>
-              <button class="btn btn-icon btn-secondary" id="btn-prev-frame" title="上一帧 (←)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/></svg>
-              </button>
-              <button class="btn play-toggle-btn" id="btn-play-pause" title="播放/暂停 (Space)">
-                <span id="play-icon">▶</span>
-              </button>
-              <button class="btn btn-icon btn-secondary" id="btn-next-frame" title="下一帧 (→)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/></svg>
-              </button>
-              <button class="btn btn-icon btn-secondary" id="btn-last-frame" title="最后一帧 (End)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-              </button>
+          <div class="card-body">
+            <!-- 播放器视口舞台 (高清视口) -->
+            <div class="player-stage-wrapper checkerboard-bg" id="player-wrapper">
+              <canvas id="player-canvas" width="460" height="380"></canvas>
+              <div class="player-frame-indicator" id="player-frame-indicator">0 / 0</div>
             </div>
 
-            <!-- 帧率滑块与微调 -->
-            <div class="player-slider-row">
-              <span class="label-title">帧率 (FPS):</span>
-              <input type="range" id="fps-slider" min="1" max="60" value="12" style="flex: 1; accent-color: var(--accent-blue);">
-              <span class="fps-display" id="fps-display">12 FPS</span>
+            <!-- 播放器大号控制面板 -->
+            <div class="player-controls-card">
+              <div class="playback-buttons">
+                <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-first-frame" title="第一帧 (Home)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+                </button>
+                <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-prev-frame" title="上一帧 (← / ,)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"/></svg>
+                </button>
+                <button class="btn play-toggle-btn btn-play-lg" id="btn-play-pause" title="播放/暂停 (Space)">
+                  <span id="play-icon">▶</span>
+                </button>
+                <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-next-frame" title="下一帧 (→ / .)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/></svg>
+                </button>
+                <button class="btn btn-icon btn-secondary btn-control-lg" id="btn-last-frame" title="最后一帧 (End)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                </button>
+              </div>
+
+              <!-- 大号帧率滑块 -->
+              <div class="control-row-lg" style="margin-top: 4px;">
+                <span class="label-title-lg">帧率 (FPS):</span>
+                <input type="range" id="fps-slider" min="1" max="60" value="12" class="pro-slider">
+                <span class="fps-display-lg" id="fps-display">12 FPS</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 卡片 2：📏 人物缩放与身量校准 (默认展开) -->
+        <div class="accordion-card" id="card-scale" data-card-id="card-scale">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="card-title-icon">📏</span>
+              <span class="card-title-text">人物缩放与身量校准</span>
+            </div>
+            <div class="card-header-actions">
+              <button class="btn btn-scale-badge" id="btn-suggest-scale" style="display: none;" title="点击直接应用智能推荐的身量比例">💡 建议 92%</button>
+              <span id="frame-scale-display" class="scale-display-badge">100%</span>
+              <span class="card-arrow" title="收起/展开卡片">▾</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="card-inner-padded">
+              <!-- 滑块与百分比输入行 -->
+              <div class="control-row-lg">
+                <input type="range" id="frame-scale-slider" min="50" max="150" step="1" value="100" class="pro-slider" title="拖动无极调节角色大小 (50% ~ 150%)">
+                <div class="scale-actions-group">
+                  <input type="number" id="frame-scale-input" min="20" max="300" step="1" value="100" class="pro-number-input" title="直接输入百分比 (20% ~ 300%)">
+                  <button class="btn btn-secondary btn-control-md" id="btn-scale-minus" title="微调缩小 5%">-5%</button>
+                  <button class="btn btn-secondary btn-control-md" id="btn-scale-plus" title="微调放大 5%">+5%</button>
+                  <button class="btn btn-secondary btn-control-md" id="btn-reset-scale" title="恢复默认 100% 原始尺寸">↺ 100%</button>
+                </div>
+              </div>
+
+              <!-- 智能身高校准按钮组 -->
+              <div class="button-grid-2">
+                <button class="btn btn-primary btn-pro-action" id="btn-auto-scale-all" title="以第1帧为基准，智能排除刀光等高空特效，一键自动校准所有帧的人物身高比例">
+                  🎯 全部自动对齐身量
+                </button>
+                <button class="btn btn-secondary btn-pro-action" id="btn-auto-scale-frame" title="将当前选中帧的人物身高一键校准到与第1帧一致">
+                  📏 当前帧校准
+                </button>
+              </div>
+
+              <!-- 幽灵透光台对比 -->
+              <div class="toggle-row-lg">
+                <label class="toggle-item-lg" title="将第1帧以青蓝色半透明剪影固定在底层作为参考基准，调节比例时一目了然">
+                  <input type="checkbox" id="ghost-overlay-toggle">
+                  <span class="toggle-text">👻 基准透光重叠 (Ghost Overlay)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 卡片 3：🎯 锚点与位置微调 (默认展开) -->
+        <div class="accordion-card" id="card-alignment" data-card-id="card-alignment">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="card-title-icon">🎯</span>
+              <span class="card-title-text">锚点与位置微调</span>
+            </div>
+            <div class="card-header-actions">
+              <span class="card-arrow" title="收起/展开卡片">▾</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="card-inner-padded">
+              <!-- 28px 九宫格点阵 + X/Y 偏移量微调 -->
+              <div class="alignment-main-row">
+                <div class="pivot-grid-container">
+                  <span class="label-title-lg">锚点预设</span>
+                  <div class="pivot-grid-lg" id="pivot-grid" title="九宫格快速锚点定位">
+                    <div class="pivot-dot" data-pivot="top-left" title="左上角"></div>
+                    <div class="pivot-dot" data-pivot="top-center" title="中上"></div>
+                    <div class="pivot-dot" data-pivot="top-right" title="右上角"></div>
+                    <div class="pivot-dot" data-pivot="center-left" title="左中"></div>
+                    <div class="pivot-dot" data-pivot="center" title="正中心"></div>
+                    <div class="pivot-dot" data-pivot="center-right" title="右中"></div>
+                    <div class="pivot-dot" data-pivot="bottom-left" title="左下角"></div>
+                    <div class="pivot-dot active" data-pivot="bottom-center" title="底部中心 (默认地面脚底)"></div>
+                    <div class="pivot-dot" data-pivot="bottom-right" title="右下角"></div>
+                  </div>
+                </div>
+
+                <div class="offset-inputs-container">
+                  <span class="label-title-lg">像素偏移微调</span>
+                  <div class="offset-inputs-lg">
+                    <div class="coord-field-lg">
+                      <span class="coord-tag">X:</span>
+                      <input type="number" id="offset-x" value="0" title="水平偏移量 (也可直接在上方播放器视口内拖拽人物)">
+                      <span class="coord-unit">px</span>
+                    </div>
+                    <div class="coord-field-lg">
+                      <span class="coord-tag">Y:</span>
+                      <input type="number" id="offset-y" value="0" title="垂直偏移量 (正数向下贴地，负数向上腾空)">
+                      <span class="coord-unit">px</span>
+                    </div>
+                  </div>
+                  <div class="align-reset-wrapper">
+                    <button class="btn btn-secondary btn-control-md" id="btn-reset-offset" style="width: 100%;" title="将当前帧 X/Y 偏移量重置归零">
+                      ↺ 归零当前偏移
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 对齐操作大号按钮组 -->
+              <div class="button-grid-3">
+                <button class="btn btn-primary btn-pro-action" id="btn-align-all-xy" title="一键按角色重心与地面线自动对齐全部帧">
+                  🎯 全部对齐
+                </button>
+                <button class="btn btn-secondary btn-pro-action" id="btn-align-all-ground" title="仅将全部帧的最低像素贴合到地面基准线（保留现有X轴）">
+                  ⏬ 全部Y贴地
+                </button>
+                <button class="btn btn-secondary btn-pro-action" id="btn-align-frame-ground" title="将当前选中帧的最低像素贴合到地面基准线">
+                  ⏬ 当前帧贴地
+                </button>
+              </div>
+
+              <!-- 辅助线与洋葱皮开关 -->
+              <div class="toggle-row-lg">
+                <label class="toggle-item-lg" title="显示洋葱皮半透明残影 (前一帧/后一帧)">
+                  <input type="checkbox" id="onion-skin-toggle">
+                  <span class="toggle-text">洋葱皮残影</span>
+                </label>
+                <label class="toggle-item-lg" title="显示 XY 轴参考标线、像素标尺刻度、当前帧十字准星与偏移距离标注">
+                  <input type="checkbox" id="ground-line-toggle" checked>
+                  <span class="toggle-text">XY 对齐标线</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 卡片 4：🎞️ 动作帧序列 (默认展开) -->
+        <div class="accordion-card" id="card-frames" data-card-id="card-frames">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="card-title-icon">🎞️</span>
+              <span class="card-title-text">动作帧序列 (<span id="frame-count-badge">0</span>)</span>
+            </div>
+            <div class="card-header-actions">
+              <button class="btn btn-icon btn-secondary" id="btn-add-frame" title="添加新选框">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+              <button class="btn btn-icon btn-secondary" id="btn-delete-frame" title="删除当前选中的单帧 (Delete)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+              <button class="btn btn-icon btn-danger" id="btn-clear-frames" title="清空全部选框">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+              <span class="card-arrow" title="收起/展开卡片">▾</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- 帧缩略图序列网格 -->
+            <div class="frame-list-wrapper" id="frame-list" style="min-height: 180px; max-height: 420px;">
+              <!-- 动态注入帧缩略图卡片 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 卡片 5：✂️ 选框尺寸与均等切片 (默认收起) -->
+        <div class="accordion-card collapsed" id="card-slice" data-card-id="card-slice">
+          <div class="card-header">
+            <div class="card-title">
+              <span class="card-title-icon">✂️</span>
+              <span class="card-title-text">选框尺寸与均等切片</span>
+            </div>
+            <div class="card-header-actions">
+              <span class="card-arrow" title="收起/展开卡片">▸</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="card-inner-padded">
+              <div class="control-row-lg">
+                <span class="label-title-lg">当前选框尺寸 (W × H)</span>
+                <div class="offset-inputs-lg">
+                  <div class="coord-field-lg">
+                    <span class="coord-tag">宽:</span>
+                    <input type="number" id="frame-w" min="4" placeholder="宽" title="当前帧选框宽度 (Enter应用)">
+                    <span class="coord-unit">px</span>
+                  </div>
+                  <div class="coord-field-lg">
+                    <span class="coord-tag">高:</span>
+                    <input type="number" id="frame-h" min="4" placeholder="高" title="当前帧选框高度 (Enter应用)">
+                    <span class="coord-unit">px</span>
+                  </div>
+                </div>
+              </div>
+              <div class="button-grid-2" style="margin-top: 4px;">
+                <button class="btn btn-secondary btn-pro-action" id="btn-unify-size" title="将全部选框尺寸统一为相同大小（以脚底中心对齐）">
+                  📐 统一全部尺寸
+                </button>
+                <button class="btn btn-secondary btn-pro-action" id="btn-grid-slice" title="按行与列生成均等网格选框">
+                  ⊞ 网格等分切片
+                </button>
+              </div>
             </div>
           </div>
         </div>

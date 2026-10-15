@@ -812,6 +812,78 @@ class SpriteAnimatorApp {
         this.setStatus(`精确微调帧偏移量: X = ${newOffset.x}px, Y = ${newOffset.y}px (Shift 快速步进 10px)`);
       }
     });
+
+    // 7. 绑定手风琴卡片折叠交互与偏好记忆
+    this.bindAccordionCards();
+  }
+
+  /**
+   * 绑定可折叠手风琴大卡片交互与偏好记忆
+   */
+  bindAccordionCards() {
+    const cards = document.querySelectorAll('.sidebar-panel .accordion-card');
+    if (!cards || cards.length === 0) return;
+
+    const STORAGE_KEY = 'sprite_animator_accordion_state';
+
+    // 1. 尝试从 localStorage 恢复用户折叠习惯
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const stateMap = JSON.parse(saved);
+        cards.forEach((card) => {
+          const cardId = card.getAttribute('data-card-id') || card.id;
+          if (cardId && stateMap[cardId] !== undefined) {
+            const isCollapsed = Boolean(stateMap[cardId]);
+            card.classList.toggle('collapsed', isCollapsed);
+            const arrow = card.querySelector('.card-arrow');
+            if (arrow) {
+              arrow.textContent = isCollapsed ? '▸' : '▾';
+            }
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('[SpriteAnimator] Failed to read accordion state from localStorage:', err);
+    }
+
+    // 2. 为每个卡片头部绑定点击折叠交互
+    cards.forEach((card) => {
+      const header = card.querySelector('.card-header');
+      if (!header) return;
+
+      header.addEventListener('click', (e) => {
+        // 如果点击的是头部内部的操作按钮、下拉框、输入框等交互控件，不触发折叠
+        if (e.target.closest('button, select, input, .card-header-actions select, .card-header-actions button')) {
+          return;
+        }
+
+        const willCollapse = !card.classList.contains('collapsed');
+        card.classList.toggle('collapsed', willCollapse);
+
+        const arrow = card.querySelector('.card-arrow');
+        if (arrow) {
+          arrow.textContent = willCollapse ? '▸' : '▾';
+        }
+
+        // 保存最新偏好到 localStorage
+        try {
+          const stateMap = {};
+          cards.forEach((c) => {
+            const cId = c.getAttribute('data-card-id') || c.id;
+            if (cId) {
+              stateMap[cId] = c.classList.contains('collapsed');
+            }
+          });
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(stateMap));
+        } catch (err) {
+          console.warn('[SpriteAnimator] Failed to save accordion state to localStorage:', err);
+        }
+
+        // 若涉及播放器展开/收起，触发一次视口重绘保证画面对齐
+        this.renderPlayerViewport();
+      });
+    });
   }
 
   /**
